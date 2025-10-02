@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
-import unicodedata # Módulo para normalização de caracteres
+import unicodedata # Módulo essencial para lidar com acentos/caracteres ocultos
 
 # ========== CONFIGURAÇÃO GERAL ==========
 st.set_page_config(page_title="📊 Dashboard Epidemiológico", layout="wide")
@@ -10,19 +10,20 @@ st.set_page_config(page_title="📊 Dashboard Epidemiológico", layout="wide")
 st.title("📊 Dashboard Epidemiológico Interativo")
 st.caption("Fonte: Google Sheets - Atualização automática")
 
-# Dicionário FINAL para padronizar nomes de colunas no DataFrame LIMPO
-# CHAVES: Nomes de colunas no DataFrame APÓS a limpeza universal (ex: 'CLASSIFICACAO' ou 'SEMANA_EPIDEMIOLOGICA_2')
-# VALORES: Nomes finais usados no código (limpos e padronizados)
+# Dicionário FINAL para padronizar nomes de colunas no DataFrame LIMPO.
+# Ele mapeia o nome limpo lido (que pode vir de uma duplicata) para o nome final desejado.
 FINAL_RENAME_MAP = {
-    # Padronização de duplicatas e variações de SE (após limpeza):
-    'SEMANA_EPIDEMIOLOGICA_2': 'SEMANA_EPIDEMIOLOGICA',
-    'SEMANA_EPIDEMIOLOGICA': 'SEMANA_EPIDEMIOLOGICA', # Garante que a versão simples também mapeie para o nome final
+    # Assume que a coluna principal foi corrigida para este nome na planilha:
+    'SEMANA_EPIDEMIOLOGICA': 'SEMANA_EPIDEMIOLOGICA',
+    'SEMANA_EPIDEMIOLOGICA_2': 'SEMANA_EPIDEMIOLOGICA', # Se houver duplicata, força o nome principal
     
-    # Padronização de datas (após limpeza):
+    # Datas
+    'DATA_NOTIFICACAO': 'DATA_NOTIFICACAO',
     'DATA_DE_NOTIFICACAO': 'DATA_NOTIFICACAO',
+    'DATA_PRIMEIRO_SINTOMAS': 'DATA_SINTOMAS',
     'DATA_PRIMEIROS_SINTOMAS': 'DATA_SINTOMAS',
     
-    # Padronização de abreviações e typos (após limpeza):
+    # Outras Colunas
     'FA': 'FAIXA_ETARIA', 
     'BAIRRO_RESIDENCIA': 'BAIRRO',
     'EVOLUCAO_DO_CASO': 'EVOLUCAO',
@@ -72,10 +73,11 @@ def carregar_dados():
         
     
     # --- Passo 1: Limpeza Universal de Nomes de Colunas ---
-    # Aplica a limpeza robusta em TODAS as colunas do DataFrame
+    # Aplica a limpeza robusta em TODAS as colunas do DataFrame.
     df.columns = [limpar_nome_coluna(col) for col in df.columns] 
 
     # --- Passo 2: Padronização Final de Nomes (Resolve Duplicatas/Typos) ---
+    # Renomeia as colunas limpas para os nomes finais padronizados do dashboard.
     rename_dict = {}
     for k_limpo, v_final in FINAL_RENAME_MAP.items():
         if k_limpo in df.columns:
@@ -83,14 +85,10 @@ def carregar_dados():
             
     df.rename(columns=rename_dict, inplace=True)
     
-    # --- Passo 3: Limpeza de Colunas Duplicadas (Ex: Duas DATA_NOTIFICACAO) ---
-    # O Pandas, ao renomear, pode deixar as colunas que não foram mapeadas
-    # mas que tinham nomes idênticos (após limpeza) ainda existindo.
-    # Excluímos as colunas que estão no mapa de renomeação, mas que
-    # não são o nome final desejado (para evitar duplicatas).
-    colunas_a_manter = sorted(list(set(df.columns)))
-    
-    df = df[colunas_a_manter]
+    # --- Passo 3: Limpeza de Colunas Duplicadas ---
+    # Esta etapa garante que não haja colunas duplicadas que sobreviveram ao processo (ex: duas colunas que foram limpas para 'DATA_NOTIFICACAO').
+    df = df.loc[:,~df.columns.duplicated()].copy()
+
 
     # --- PADRONIZAÇÃO E AGRUPAMENTO DA FAIXA ETÁRIA ---
     if 'FAIXA_ETARIA' in df.columns:
@@ -101,7 +99,6 @@ def carregar_dados():
     # Converter datas
     for col in ['DATA_NOTIFICACAO', 'DATA_SINTOMAS']:
         if col in df.columns:
-            # Garante que o nome final existe antes de tentar converter
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
     return df
