@@ -1,77 +1,7 @@
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-from datetime import datetime
+# Mantenha o COLUNA_MAP e demais variáveis como estão.
+# Substitua APENAS a função carregar_dados()
 
-# ========== CONFIGURAÇÃO GERAL ==========
-st.set_page_config(page_title="📊 Dashboard Epidemiológico", layout="wide")
-
-st.title("📊 Dashboard Epidemiológico Interativo")
-st.caption("Fonte: Google Sheets - Atualização automática")
-
-# Dicionário para padronizar nomes de colunas
-# CHAVES: Nomes de colunas na planilha original (com acentos/espaços)
-# VALORES: Nomes finais usados no código (limpos)
-COLUNA_MAP = {
-    'SEMANA EPIDEMIOLÓGICA 2': 'SEMANA_EPIDEMIOLOGICA',
-    'DATA DE NOTIFICAÇÃO': 'DATA_NOTIFICACAO',
-    'DATA PRIMEIRO SINTOMAS': 'DATA_SINTOMAS',
-    'FA': 'FAIXA_ETARIA', 
-    'BAIRRO RESIDÊNCIA': 'BAIRRO',
-    'EVOLUÇÃO DO CASO': 'EVOLUCAO',
-    'CLASSIFCAÇÃO': 'CLASSIFICACAO_FINAL',
-    'RAÇA/COR': 'RACA_COR',
-    'ESCOLARIDADE': 'ESCOLARIDADE',
-    'DISTRITO': 'DISTRITO'
-}
-
-# CHAVE DE ORDENAÇÃO MANUAL PARA O NOVO PADRÃO DE FAIXA ETÁRIA
-ORDEM_FAIXA_ETARIA = [
-    '1 a 4 anos', 
-    '5 a 9 anos', 
-    '10 a 14 anos', 
-    '15 a 19 anos', 
-    '20 a 39 anos', 
-    '40 a 59 anos', 
-    '60 anos ou mais', 
-    'IGNORADO'
-]
-
-# DICIONÁRIO PARA AGRUPAR E PADRONIZAR AS FAIXAS ETÁRIAS ANTIGAS PARA AS NOVAS
-MAPEAMENTO_FAIXA_ETARIA = {
-    '0 a 4': '1 a 4 anos',
-    '1 a 4': '1 a 4 anos',
-    '5 a 9': '5 a 9 anos',
-    '10 a 14': '10 a 14 anos',
-    '15 a 19': '15 a 19 anos',
-    
-    '20 a 29': '20 a 39 anos',
-    '30 a 39': '20 a 39 anos',
-    
-    '40 a 49': '40 a 59 anos',
-    '50 a 59': '40 a 59 anos',
-    
-    '60 a 69': '60 anos ou mais',
-    '70 a 79': '60 anos ou mais',
-    '80 ou mais': '60 anos ou mais',
-    'IGNORADO': 'IGNORADO',
-}
-
-# FUNÇÃO DE LIMPEZA DE COLUNAS: Garante que acentos e espaços virem apenas letras e underscores
-def limpar_nome_coluna(col):
-    col_limpa = col.strip().upper().replace(' ', '_').replace('/', '_')
-    # Substitui acentos comuns por letras não acentuadas (CORREÇÃO CRÍTICA)
-    replacements = {
-        'Ã': 'A', 'Õ': 'O', 'Ç': 'C', 
-        'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 
-        'Â': 'A', 'Ê': 'E', 'Ô': 'O'
-    }
-    for k, v in replacements.items():
-        col_limpa = col_limpa.replace(k, v)
-    return col_limpa
-
-
-# ========= FUNÇÃO DE CARREGAR DADOS =========
+# ========= FUNÇÃO DE CARREGAR DADOS COM DIAGNÓSTICO =========
 @st.cache_data
 def carregar_dados():
     url = "https://docs.google.com/spreadsheets/d/1bdHetdGEXLgXv7A2aGvOaItKxiAuyg0Ip0UER1BjjOg/export?format=csv"
@@ -81,33 +11,33 @@ def carregar_dados():
     except Exception as e:
         st.error(f"❌ Erro de conexão. Verifique o compartilhamento da planilha.")
         st.stop()
-        
+
+    # >>>>> DIAGNÓSTICO: MOSTRA AS COLUNAS ORIGINAIS <<<<<
+    # Isso mostrará os nomes EXATOS das colunas lidas.
+    st.warning(f"COLUNAS LIDOS DO CSV (USE ESTES NOMES NO MAPA, SE NECESSÁRIO):\n{df.columns.tolist()}")
+
     # --- Passo de Limpeza e Padronização de Colunas ---
     # 1. Aplica a limpeza robusta em TODAS as colunas do DataFrame
     df.columns = [limpar_nome_coluna(col) for col in df.columns]
 
-    # 2. Cria o dicionário de renomeação usando as chaves do COLUNA_MAP limpas 
+    # 2. Cria o dicionário de renomeação
     rename_dict = {}
     cleaned_df_columns = df.columns.tolist()
 
     for k_original, v_final in COLUNA_MAP.items():
         k_limpa = limpar_nome_coluna(k_original)
         
-        # Tenta a correspondência exata para renomear
         if k_limpa in cleaned_df_columns:
             rename_dict[k_limpa] = v_final
 
     df.rename(columns=rename_dict, inplace=True)
     
-    # 3. CORREÇÃO DE CONTINGÊNCIA PARA ERROS PERSISTENTES (SEMANA EPIDEMIOLÓGICA)
-    # Garante que a coluna crítica seja renomeada, mesmo se o mapa falhar por pequenas variações.
+    # 3. CORREÇÃO DE CONTINGÊNCIA SUPER ROBUSTA PARA SEMANA_EPIDEMIOLOGICA
     if 'SEMANA_EPIDEMIOLOGICA' not in df.columns:
         for col in df.columns:
-            # Procura por qualquer coluna que contenha a palavra-chave "SEMANA" e "EPIDEMIOLOGICA"
             if 'SEMANA' in col and 'EPIDEMIOLOGICA' in col:
                 df.rename(columns={col: 'SEMANA_EPIDEMIOLOGICA'}, inplace=True)
                 break
-
 
     # --- PADRONIZAÇÃO E AGRUPAMENTO DA FAIXA ETÁRIA ---
     if 'FAIXA_ETARIA' in df.columns:
@@ -122,219 +52,3 @@ def carregar_dados():
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
     return df
-
-df = carregar_dados()
-
-if df.empty:
-    st.warning("O DataFrame está vazio.")
-    st.stop()
-
-
-# ========= FILTROS NA BARRA LATERAL (FAIXA ETÁRIA ORDENADA) =========
-st.sidebar.header("🔎 Filtros")
-
-df_filtrado = df.copy() 
-
-# NOVO: Filtro Classificação Final (Separado e no topo)
-if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
-    classificacoes = st.sidebar.multiselect("Classificação Final", df['CLASSIFICACAO_FINAL'].dropna().unique())
-    if classificacoes:
-        df_filtrado = df_filtrado[df_filtrado['CLASSIFICACAO_FINAL'].isin(classificacoes)]
-        
-
-# --- Filtros Categóricos ---
-
-# FILTRO DE SEMANA EPIDEMIOLOGICA (AGORA ESTÁVEL)
-if 'SEMANA_EPIDEMIOLOGICA' in df_filtrado.columns:
-    semanas = st.sidebar.multiselect("Semana Epidemiológica", sorted(df['SEMANA_EPIDEMIOLOGICA'].dropna().unique()))
-    if semanas:
-        df_filtrado = df_filtrado[df_filtrado['SEMANA_EPIDEMIOLOGICA'].isin(semanas)]
-
-if 'SEXO' in df_filtrado.columns:
-    sexos = st.sidebar.multiselect("Sexo", df['SEXO'].dropna().unique())
-    if sexos:
-        df_filtrado = df_filtrado[df_filtrado['SEXO'].isin(sexos)]
-
-# Ordenação da Faixa Etária
-if 'FAIXA_ETARIA' in df_filtrado.columns:
-    faixas_presentes = df['FAIXA_ETARIA'].dropna().unique().tolist()
-    
-    faixas_ordenadas = [f for f in ORDEM_FAIXA_ETARIA if f in faixas_presentes]
-    
-    faixas = st.sidebar.multiselect("Faixa Etária", faixas_ordenadas) 
-    if faixas:
-        df_filtrado = df_filtrado[df_filtrado['FAIXA_ETARIA'].isin(faixas)]
-
-# FILTRO DE EVOLUÇÃO DO CASO (AGORA ESTÁVEL)
-if 'EVOLUCAO' in df_filtrado.columns:
-    evolucoes = st.sidebar.multiselect("Evolução do Caso", df['EVOLUCAO'].dropna().unique())
-    if evolucoes:
-        df_filtrado = df_filtrado[df_filtrado['EVOLUCAO'].isin(evolucoes)]
-
-if 'ESCOLARIDADE' in df_filtrado.columns:
-    escolaridades = st.sidebar.multiselect("Escolaridade", df['ESCOLARIDADE'].dropna().unique())
-    if escolaridades:
-        df_filtrado = df_filtrado[df_filtrado['ESCOLARIDADE'].isin(escolaridades)]
-
-if 'BAIRRO' in df_filtrado.columns:
-    bairros = st.sidebar.multiselect("Bairro", sorted(df['BAIRRO'].dropna().unique()))
-    if bairros:
-        df_filtrado = df_filtrado[df_filtrado['BAIRRO'].isin(bairros)]
-        
-# Verifica se o DataFrame filtrado está vazio
-if df_filtrado.empty:
-    st.warning("Nenhum dado encontrado com os filtros selecionados.")
-    st.stop()
-
-
-# ========= INDICADORES PRINCIPAIS (CARDS) =========
-st.header("Resumo dos Indicadores")
-
-confirmados = 0 
-obitos = 0
-descartados = 0 
-
-col0, col1, col2, col3, col4 = st.columns(5) 
-
-total_filtrado = len(df_filtrado)
-col1.metric("Notificações no período", total_filtrado) 
-
-if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
-    confirmados = (df_filtrado['CLASSIFICACAO_FINAL'].astype(str).str.upper().str.strip() == "CONFIRMADO").sum()
-    descartados = (df_filtrado['CLASSIFICACAO_FINAL'].astype(str).str.upper().str.strip() == "DESCARTADO").sum()
-    col2.metric("Confirmados", confirmados)
-    col3.metric("Descartados", descartados) 
-
-if 'EVOLUCAO' in df_filtrado.columns:
-    obitos = (df_filtrado['EVOLUCAO'].astype(str).str.upper().str.contains("ÓBITO", na=False)).sum()
-
-if confirmados > 0:
-    letalidade = (obitos / confirmados) * 100
-    col4.metric("Taxa de Letalidade (%)", f"{letalidade:.2f}% ({obitos} óbitos)")
-else:
-    col4.metric("Taxa de Letalidade (%)", "N/A")
-
-
-# ========= GRÁFICOS =========
-
-st.subheader("📈 Análise Temporal e Geográfica")
-col_graf1, col_graf2 = st.columns(2)
-
-# --- 1. Casos por Semana Epidemiológica ---
-if 'SEMANA_EPIDEMIOLOGICA' in df_filtrado.columns:
-    df_semanal = df_filtrado.groupby("SEMANA_EPIDEMIOLOGICA").size().reset_index(name="Casos")
-    fig_sem = px.line(
-        df_semanal, 
-        x="SEMANA_EPIDEMIOLOGICA", 
-        y="Casos", 
-        markers=True,
-        title="Casos por Semana Epidemiológica"
-    )
-    col_graf1.plotly_chart(fig_sem, use_container_width=True)
-
-# --- 2. Distribuição por Distrito ---
-if 'DISTRITO' in df_filtrado.columns:
-    df_distrito = df_filtrado['DISTRITO'].value_counts().reset_index()
-    df_distrito.columns = ['Distrito', 'Casos'] 
-    
-    fig_distrito = px.bar(
-        df_distrito, 
-        x='Distrito', 
-        y='Casos',
-        title="Distribuição de Casos por Distrito"
-    )
-    col_graf2.plotly_chart(fig_distrito, use_container_width=True)
-
-# --- 3. Distribuição por Bairro ---
-st.subheader("🏘️ Distribuição das notificações por Bairro")
-if 'BAIRRO' in df_filtrado.columns:
-    df_bairro = df_filtrado['BAIRRO'].value_counts().reset_index()
-    df_bairro.columns = ['Bairro', 'Casos'] 
-    
-    fig_bairro = px.bar(
-        df_bairro.head(15), 
-        x='Bairro', 
-        y='Casos',
-        title="Top 15 Bairros por Casos Notificados"
-    )
-    st.plotly_chart(fig_bairro, use_container_width=True)
-
-# --- 4. Relação Raça/Cor vs. Escolaridade ---
-st.subheader("🎓 Perfil Social: Raça/Cor vs. Escolaridade")
-if 'RACA_COR' in df_filtrado.columns and 'ESCOLARIDADE' in df_filtrado.columns:
-    df_cruzado = df_filtrado.groupby(['RACA_COR', 'ESCOLARIDADE']).size().reset_index(name='Casos')
-
-    fig_cruzado = px.bar(
-        df_cruzado,
-        x='RACA_COR',
-        y='Casos',
-        color='ESCOLARIDADE',
-        barmode='group',
-        title='Casos por Raça/Cor e Escolaridade'
-    )
-    st.plotly_chart(fig_cruzado, use_container_width=True)
-
-
-# --- 5. Sintomas e Comorbidades Mais Frequentes ---
-st.subheader("🧩 Sintomas e Comorbidades")
-sintomas_e_comorbidades = [
-    "FEBRE", "MIALGIA", "CEFALEIA", "EXANTEMA", "VOMITO", "NAUSEA",
-    "DOR_COSTAS", "CONJUNTVITE", "ARTRITE", "ARTRALGIA", "PETEQUIAS",
-    "LEUCOPENIA", "LAÇO", "DOR_RETRO", "DIABETES", "HEMATOLOGICAS",
-    "HEPATOPATIAS", "RENAL", "HIPERTENSÃO", "ACIDO_PEPT", "AUTO_IMUNE"
-]
-
-presenca_data = []
-for s in sintomas_e_comorbidades:
-    s_limpa = limpar_nome_coluna(s)
-    
-    if s_limpa in df_filtrado.columns:
-        count = (df_filtrado[s_limpa].astype(str).str.upper().str.strip() == "SIM").sum()
-        if count > 0:
-            nome_display = s.replace('_', ' ').capitalize()
-            presenca_data.append({"Item": nome_display, "Casos": count})
-
-if presenca_data:
-    df_presenca = pd.DataFrame(presenca_data)
-    
-    fig_sintomas = px.bar(
-        df_presenca.sort_values(by="Casos", ascending=True), 
-        y="Item", 
-        x="Casos", 
-        orientation='h',
-        title="Frequência de Manifestações/Comorbidades (Resposta 'Sim')"
-    )
-    st.plotly_chart(fig_sintomas, use_container_width=True)
-else:
-    st.info("Nenhuma manifestação ou comorbidade 'SIM' encontrada no período filtrado.")
-
-
-# --- 6. Distribuição por Sexo e Faixa Etária (Ordenada) ---
-st.subheader("👥 Perfil Demográfico")
-if 'SEXO' in df_filtrado.columns and 'FAIXA_ETARIA' in df_filtrado.columns:
-    
-    faixas_presentes_no_grafico = df_filtrado['FAIXA_ETARIA'].dropna().unique().tolist()
-    faixas_para_grafico = [f for f in ORDEM_FAIXA_ETARIA if f in faixas_presentes_no_grafico]
-
-    fig_demog = px.histogram(
-        df_filtrado, 
-        x="FAIXA_ETARIA", 
-        color="SEXO", 
-        barmode="group",
-        title="Casos por Faixa Etária e Sexo"
-    )
-    # Define a ordem do eixo X do gráfico (usando a nova ordem padronizada)
-    fig_demog.update_xaxes(categoryorder='array', categoryarray=faixas_para_grafico)
-    
-    st.plotly_chart(fig_demog, use_container_width=True)
-
-
-# ========= DOWNLOAD DOS DADOS FILTRADOS =========
-st.download_button(
-    "📥 Baixar dados filtrados (CSV)",
-    data=df_filtrado.to_csv(index=False).encode("utf-8"),
-    file_name="dados_filtrados_epidemiologia.csv",
-    mime="text/csv"
-)
-
-st.caption("Desenvolvido para Vigilância em Saúde.")
