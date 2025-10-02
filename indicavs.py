@@ -167,11 +167,8 @@ descartados = 0
 
 col0, col1, col2, col3, col4 = st.columns(5) 
 
-total_base = len(df) 
-col0.metric("Número de Notificações já registradas", total_base) 
-
 total_filtrado = len(df_filtrado)
-col1.metric("Número de notificações registradas no período", total_filtrado) 
+col1.metric("Notificações registradas no período", total_filtrado) 
 
 if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
     confirmados = (df_filtrado['CLASSIFICACAO_FINAL'].str.upper().str.strip() == "CONFIRMADO").sum()
