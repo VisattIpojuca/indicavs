@@ -86,7 +86,7 @@ def carregar_dados():
     df.rename(columns=rename_dict, inplace=True)
     
     # --- Passo 3: Limpeza de Colunas Duplicadas ---
-    # Esta etapa garante que não haja colunas duplicadas que sobreviveram ao processo (ex: duas colunas que foram limpas para 'DATA_NOTIFICACAO').
+    # Esta etapa garante que não haja colunas duplicadas que sobreviveram ao processo.
     df = df.loc[:,~df.columns.duplicated()].copy()
 
 
@@ -170,7 +170,7 @@ if df_filtrado.empty:
     st.stop()
 
 
-# ========= INDICADORES PRINCIPAIS (CARDS) =========
+# ========= INDICADORES PRINCIPAIS (CARDS) - ALTERAÇÃO AQUI =========
 st.header("Resumo dos Indicadores")
 
 confirmados = 0 
@@ -183,8 +183,18 @@ total_filtrado = len(df_filtrado)
 col1.metric("Notificações no período", total_filtrado) 
 
 if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
-    confirmados = (df_filtrado['CLASSIFICACAO_FINAL'].astype(str).str.upper().str.strip() == "CONFIRMADO").sum()
-    descartados = (df_filtrado['CLASSIFICACAO_FINAL'].astype(str).str.upper().str.strip() == "DESCARTADO").sum()
+    
+    # NOVAS CLASSIFICAÇÕES PARA "CONFIRMADOS" (em letras maiúsculas)
+    CLASSIFICACOES_CONFIRMADO = ["DENGUE", "DENGUE COM SINAIS DE ALARME"]
+    
+    classificacao_upper = df_filtrado['CLASSIFICACAO_FINAL'].astype(str).str.upper().str.strip()
+    
+    # Calcula confirmados (incluindo as duas categorias de Dengue)
+    confirmados = classificacao_upper.isin(CLASSIFICACOES_CONFIRMADO).sum()
+    
+    # Mantém a lógica de descartados
+    descartados = (classificacao_upper == "DESCARTADO").sum()
+    
     col2.metric("Confirmados", confirmados)
     col3.metric("Descartados", descartados) 
 
