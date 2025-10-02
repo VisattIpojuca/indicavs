@@ -39,10 +39,9 @@ def carregar_dados():
     df.columns = [col.strip().upper().replace(' ', '_').replace('/', '_') for col in df.columns]
     df.rename(columns={k.strip().upper().replace(' ', '_').replace('/', '_'): v for k, v in COLUNA_MAP.items()}, inplace=True)
 
-    # Converter datas
+    # Converter datas (manter o passo para uso nos gráficos se necessário, mesmo que não seja usado nos filtros)
     for col in ['DATA_NOTIFICACAO', 'DATA_SINTOMAS']:
         if col in df.columns:
-            # Garante que as datas inválidas são transformadas em NaT
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
     return df
@@ -54,56 +53,18 @@ if df.empty:
     st.stop()
 
 
-# ========= FILTROS NA BARRA LATERAL (CORREÇÃO DE NaT) =========
+# ========= FILTROS NA BARRA LATERAL (APENAS CATEGÓRICOS) =========
 st.sidebar.header("🔎 Filtros")
 
-df_filtrado = df.copy()
+# DataFrame inicial, sem filtros de data aplicados por padrão
+df_filtrado = df.copy() 
 
-# --- Filtros de Período (NOVO: Permite datas NaT) ---
-st.sidebar.subheader("Período de Notificação")
-if 'DATA_NOTIFICACAO' in df_filtrado.columns and not df_filtrado['DATA_NOTIFICACAO'].isnull().all():
-    data_min_notif = df_filtrado['DATA_NOTIFICACAO'].min()
-    data_max_notif = df_filtrado['DATA_NOTIFICACAO'].max()
-    
-    # Usa a data mínima e máxima válida
-    if pd.notna(data_min_notif) and pd.notna(data_max_notif):
-        data_inicio, data_fim = st.sidebar.date_input(
-            "Intervalo da Notificação",
-            value=[data_min_notif.date(), data_max_notif.date()],
-            min_value=data_min_notif.date(),
-            max_value=data_max_notif.date(),
-            key='filtro_notificacao'
-        )
-        
-        # CORREÇÃO CRUCIAL: Inclui datas NaT (isnull()) ou datas dentro do intervalo
-        df_filtrado = df_filtrado[
-            (df_filtrado['DATA_NOTIFICACAO'].dt.date >= data_inicio) & 
-            (df_filtrado['DATA_NOTIFICACAO'].dt.date <= data_fim) |
-            df_filtrado['DATA_NOTIFICACAO'].isnull() 
-        ]
-        
-st.sidebar.subheader("Período de Sintomas")
-if 'DATA_SINTOMAS' in df_filtrado.columns and not df_filtrado['DATA_SINTOMAS'].isnull().all():
-    data_min_sintoma = df_filtrado['DATA_SINTOMAS'].min()
-    data_max_sintoma = df_filtrado['DATA_SINTOMAS'].max()
+# --- Filtros Categóricos ---
+if 'SEMANA_EPIDEMIOLOGICA' in df_filtrado.columns:
+    semanas = st.sidebar.multiselect("Semana Epidemiológica", sorted(df['SEMANA_EPIDEMIOLOGICA'].dropna().unique()))
+    if semanas:
+        df_filtrado = df_filtrado[df_filtrado['SEMANA_EPIDEMIOLOGICA'].isin(semanas)]
 
-    if pd.notna(data_min_sintoma) and pd.notna(data_max_sintoma):
-        data_inicio_sint, data_fim_sint = st.sidebar.date_input(
-            "Intervalo dos Sintomas",
-            value=[data_min_sintoma.date(), data_max_sintoma.date()],
-            min_value=data_min_sintoma.date(),
-            max_value=data_max_sintoma.date(),
-            key='filtro_sintomas'
-        )
-        # CORREÇÃO CRUCIAL: Inclui datas NaT (isnull()) ou datas dentro do intervalo
-        df_filtrado = df_filtrado[
-            (df_filtrado['DATA_SINTOMAS'].dt.date >= data_inicio_sint) & 
-            (df_filtrado['DATA_SINTOMAS'].dt.date <= data_fim_sint) |
-            df_filtrado['DATA_SINTOMAS'].isnull()
-        ]
-
-st.sidebar.markdown("---")
-# --- Outros Filtros ---
 if 'SEXO' in df_filtrado.columns:
     sexos = st.sidebar.multiselect("Sexo", df['SEXO'].dropna().unique())
     if sexos:
@@ -129,16 +90,21 @@ if 'ESCOLARIDADE' in df_filtrado.columns:
     if escolaridades:
         df_filtrado = df_filtrado[df_filtrado['ESCOLARIDADE'].isin(escolaridades)]
 
+if 'BAIRRO' in df_filtrado.columns:
+    bairros = st.sidebar.multiselect("Bairro", sorted(df['BAIRRO'].dropna().unique()))
+    if bairros:
+        df_filtrado = df_filtrado[df_filtrado['BAIRRO'].isin(bairros)]
+        
 # Verifica se o DataFrame filtrado está vazio
 if df_filtrado.empty:
     st.warning("Nenhum dado encontrado com os filtros selecionados.")
     st.stop()
 
 
-# ========= INDICADORES PRINCIPAIS (CARDS - CORRIGIDO) =========
+# ========= INDICADORES PRINCIPAIS (CARDS) =========
 st.header("Resumo dos Indicadores")
 
-# Inicializa variáveis para evitar o NameError e garantir o cálculo da letalidade
+# Inicializa variáveis para garantir o cálculo da letalidade
 confirmados = 0 
 obitos = 0
 descartados = 0 
@@ -146,11 +112,11 @@ descartados = 0
 # Dividindo o espaço em 5 colunas
 col0, col1, col2, col3, col4 = st.columns(5) 
 
-# --- NOVO CARTÃO: Total Geral da Base (mostra os 1.292) ---
+# --- Total Geral da Base (Agora é o número de 1.292) ---
 total_base = len(df) 
 col0.metric("Total Geral da Base", total_base) 
 
-# --- Casos Filtrados (Mostra o número após a aplicação dos filtros) ---
+# --- Casos Filtrados (Será igual ao total da base se nenhum outro filtro for aplicado) ---
 total_filtrado = len(df_filtrado)
 col1.metric("Casos Filtrados", total_filtrado) 
 
