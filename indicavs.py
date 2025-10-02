@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
-import unicodedata # NOVO: Módulo para normalização de caracteres
+import unicodedata # Módulo para normalização de caracteres
 
 # ========== CONFIGURAÇÃO GERAL ==========
 st.set_page_config(page_title="📊 Dashboard Epidemiológico", layout="wide")
@@ -10,58 +10,47 @@ st.set_page_config(page_title="📊 Dashboard Epidemiológico", layout="wide")
 st.title("📊 Dashboard Epidemiológico Interativo")
 st.caption("Fonte: Google Sheets - Atualização automática")
 
-# Dicionário para padronizar nomes de colunas
-# CHAVES: Nomes de colunas na planilha original (sempre utilize a forma EXATA, sem a limpeza)
-# VALORES: Nomes finais usados no código (limpos)
-COLUNA_MAP = {
-    # Usando 'SEMANA EPIDEMIOLÓGICA 2' como coluna principal, mas o código agora é robusto
-    'SEMANA EPIDEMIOLÓGICA 2': 'SEMANA_EPIDEMIOLOGICA',
-    'DATA DE NOTIFICAÇÃO': 'DATA_NOTIFICACAO',
-    'DATA PRIMEIRO SINTOMAS': 'DATA_SINTOMAS',
+# Dicionário FINAL para padronizar nomes de colunas no DataFrame LIMPO
+# CHAVES: Nomes de colunas no DataFrame APÓS a limpeza universal (ex: 'CLASSIFICACAO' ou 'SEMANA_EPIDEMIOLOGICA_2')
+# VALORES: Nomes finais usados no código (limpos e padronizados)
+FINAL_RENAME_MAP = {
+    # Padronização de duplicatas e variações de SE (após limpeza):
+    'SEMANA_EPIDEMIOLOGICA_2': 'SEMANA_EPIDEMIOLOGICA',
+    'SEMANA_EPIDEMIOLOGICA': 'SEMANA_EPIDEMIOLOGICA', # Garante que a versão simples também mapeie para o nome final
+    
+    # Padronização de datas (após limpeza):
+    'DATA_DE_NOTIFICACAO': 'DATA_NOTIFICACAO',
+    'DATA_PRIMEIROS_SINTOMAS': 'DATA_SINTOMAS',
+    
+    # Padronização de abreviações e typos (após limpeza):
     'FA': 'FAIXA_ETARIA', 
-    'BAIRRO RESIDÊNCIA': 'BAIRRO',
-    'EVOLUÇÃO DO CASO': 'EVOLUCAO',
-    'CLASSIFCAÇÃO': 'CLASSIFICACAO_FINAL', # Mapeando a coluna com erro de digitação para o nome limpo
-    'RAÇA/COR': 'RACA_COR',
+    'BAIRRO_RESIDENCIA': 'BAIRRO',
+    'EVOLUCAO_DO_CASO': 'EVOLUCAO',
+    'CLASSIFICACAO': 'CLASSIFICACAO_FINAL', # Corrige o 'CLASSIFCAÇÃO' lido e limpo (CLASSIFICACAO) para o nome final
+    'RACA_COR': 'RACA_COR',
     'ESCOLARIDADE': 'ESCOLARIDADE',
     'DISTRITO': 'DISTRITO'
 }
 
 # CHAVE DE ORDENAÇÃO MANUAL PARA O NOVO PADRÃO DE FAIXA ETÁRIA
 ORDEM_FAIXA_ETARIA = [
-    '1 a 4 anos', 
-    '5 a 9 anos', 
-    '10 a 14 anos', 
-    '15 a 19 anos', 
-    '20 a 39 anos', 
-    '40 a 59 anos', 
-    '60 anos ou mais', 
-    'IGNORADO'
+    '1 a 4 anos', '5 a 9 anos', '10 a 14 anos', '15 a 19 anos', 
+    '20 a 39 anos', '40 a 59 anos', '60 anos ou mais', 'IGNORADO'
 ]
 
 # DICIONÁRIO PARA AGRUPAR E PADRONIZAR AS FAIXAS ETÁRIAS ANTIGAS PARA AS NOVAS
 MAPEAMENTO_FAIXA_ETARIA = {
-    '0 a 4': '1 a 4 anos',
-    '1 a 4': '1 a 4 anos',
-    '5 a 9': '5 a 9 anos',
-    '10 a 14': '10 a 14 anos',
-    '15 a 19': '15 a 19 anos',
-    
-    '20 a 29': '20 a 39 anos',
-    '30 a 39': '20 a 39 anos',
-    
-    '40 a 49': '40 a 59 anos',
-    '50 a 59': '40 a 59 anos',
-    
-    '60 a 69': '60 anos ou mais',
-    '70 a 79': '60 anos ou mais',
-    '80 ou mais': '60 anos ou mais',
-    'IGNORADO': 'IGNORADO',
+    '0 a 4': '1 a 4 anos', '1 a 4': '1 a 4 anos', '5 a 9': '5 a 9 anos', 
+    '10 a 14': '10 a 14 anos', '15 a 19': '15 a 19 anos',
+    '20 a 29': '20 a 39 anos', '30 a 39': '20 a 39 anos',
+    '40 a 49': '40 a 59 anos', '50 a 59': '40 a 59 anos',
+    '60 a 69': '60 anos ou mais', '70 a 79': '60 anos ou mais', 
+    '80 ou mais': '60 anos ou mais', 'IGNORADO': 'IGNORADO',
 }
 
 # FUNÇÃO DE LIMPEZA DE COLUNAS: CORREÇÃO DEFINITIVA COM UNICODE NORMALIZATION
 def limpar_nome_coluna(col):
-    # 1. Unicode Normalization (NFKD): Trata acentos e caracteres ocultos
+    # 1. Unicode Normalization (NFKD): Trata acentos, cedilhas e caracteres ocultos.
     col_normalized = unicodedata.normalize('NFKD', col).encode('ascii', 'ignore').decode('utf-8')
     
     # 2. Converte para maiúsculas e substitui espaços e símbolos por underscore
@@ -70,7 +59,7 @@ def limpar_nome_coluna(col):
     return col_limpa
 
 
-# ========= FUNÇÃO DE CARREGAR DADOS (AGORA ROBUSTA) =========
+# ========= FUNÇÃO DE CARREGAR DADOS (FLUXO ROBUSTO) =========
 @st.cache_data
 def carregar_dados():
     url = "https://docs.google.com/spreadsheets/d/1bdHetdGEXLgXv7A2aGvOaItKxiAuyg0Ip0UER1BjjOg/export?format=csv"
@@ -81,28 +70,27 @@ def carregar_dados():
         st.error(f"❌ Erro de conexão. Verifique o compartilhamento da planilha.")
         st.stop()
         
-    # --- Passo de Limpeza e Padronização de Colunas ---
     
-    # 1. Cria um mapa de renomeação usando as chaves do COLUNA_MAP com a limpeza robusta
-    rename_dict = {}
-    for k_original, v_final in COLUNA_MAP.items():
-        k_limpa = limpar_nome_coluna(k_original)
-        
-        # Procura a coluna no DataFrame (o Pandas cria as colunas com os nomes do CSV)
-        if k_original in df.columns:
-            # Se o nome original for encontrado, renomeia usando o nome de destino (v_final)
-            rename_dict[k_original] = v_final
+    # --- Passo 1: Limpeza Universal de Nomes de Colunas ---
+    # Aplica a limpeza robusta em TODAS as colunas do DataFrame
+    df.columns = [limpar_nome_coluna(col) for col in df.columns] 
 
+    # --- Passo 2: Padronização Final de Nomes (Resolve Duplicatas/Typos) ---
+    rename_dict = {}
+    for k_limpo, v_final in FINAL_RENAME_MAP.items():
+        if k_limpo in df.columns:
+            rename_dict[k_limpo] = v_final
+            
     df.rename(columns=rename_dict, inplace=True)
     
-    # 2. Aplica a limpeza robusta em TODAS as colunas restantes (agora as colunas mapeadas
-    # já tem seus nomes finais e as não mapeadas são limpas)
-    df.columns = [limpar_nome_coluna(col) if col not in COLUNA_MAP.values() else col for col in df.columns]
-
-    # --- CORREÇÃO DE DUPLICATAS DA NOTIFICAÇÃO ---
-    # Se houver uma coluna 'DATA_DE_NOTIFICACAO' duplicada (como sugeriu a lista),
-    # o código irá pegar a coluna limpa e renomeada 'DATA_NOTIFICACAO' (que é a do mapa)
-    # e ignorar a outra.
+    # --- Passo 3: Limpeza de Colunas Duplicadas (Ex: Duas DATA_NOTIFICACAO) ---
+    # O Pandas, ao renomear, pode deixar as colunas que não foram mapeadas
+    # mas que tinham nomes idênticos (após limpeza) ainda existindo.
+    # Excluímos as colunas que estão no mapa de renomeação, mas que
+    # não são o nome final desejado (para evitar duplicatas).
+    colunas_a_manter = sorted(list(set(df.columns)))
+    
+    df = df[colunas_a_manter]
 
     # --- PADRONIZAÇÃO E AGRUPAMENTO DA FAIXA ETÁRIA ---
     if 'FAIXA_ETARIA' in df.columns:
@@ -110,10 +98,10 @@ def carregar_dados():
         df['FAIXA_ETARIA'] = df['FAIXA_ETARIA'].replace(MAPEAMENTO_FAIXA_ETARIA)
         df['FAIXA_ETARIA'] = df['FAIXA_ETARIA'].fillna('IGNORADO')
         
-
     # Converter datas
     for col in ['DATA_NOTIFICACAO', 'DATA_SINTOMAS']:
         if col in df.columns:
+            # Garante que o nome final existe antes de tentar converter
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
     return df
@@ -140,11 +128,13 @@ if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
 # --- Outros Filtros Categóricos ---
 
 # FILTRO DE SEMANA EPIDEMIOLÓGICA (AGORA ESTÁVEL)
-if 'SEMANA_EPIDEMIOLOGICA' in df_filtrado.columns:
-    # Este filtro agora funciona porque a coluna foi renomeada corretamente
+if 'SEMANA_EPIDEMIOLOGICA' in df_filtrado.columns: # CHECK DE SEGURANÇA
     semanas = st.sidebar.multiselect("Semana Epidemiológica", sorted(df['SEMANA_EPIDEMIOLOGICA'].dropna().unique()))
     if semanas:
         df_filtrado = df_filtrado[df_filtrado['SEMANA_EPIDEMIOLOGICA'].isin(semanas)]
+else:
+    st.sidebar.warning("Coluna 'Semana Epidemiológica' não encontrada. Verifique o nome na planilha.")
+
 
 if 'SEXO' in df_filtrado.columns:
     sexos = st.sidebar.multiselect("Sexo", df['SEXO'].dropna().unique())
