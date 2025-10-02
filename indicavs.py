@@ -17,7 +17,7 @@ COLUNA_MAP = {
     'FA': 'FAIXA_ETARIA', # Manter o nome FA para mapear para FAIXA_ETARIA
     'BAIRRO RESIDÊNCIA': 'BAIRRO',
     'EVOLUÇÃO DO CASO': 'EVOLUCAO',
-    'CLASSIFICACAO': 'CLASSIFICACAO_FINAL', # CORREÇÃO APLICADA: Nome da coluna AM sem acento
+    'CLASSIFICACAO': 'CLASSIFICACAO_FINAL', # Mapeamento da coluna AM (sem acento)
     'RAÇA/COR': 'RACA_COR',
     'ESCOLARIDADE': 'ESCOLARIDADE',
     'DISTRITO': 'DISTRITO'
@@ -108,19 +108,19 @@ st.sidebar.header("🔎 Filtros")
 
 df_filtrado = df.copy() 
 
-# --- Filtros Categóricos ---
-
+# 1. Semana Epidemiológica
 if 'SEMANA_EPIDEMIOLOGICA' in df_filtrado.columns:
     semanas = st.sidebar.multiselect("Semana Epidemiológica", sorted(df['SEMANA_EPIDEMIOLOGICA'].dropna().unique()))
     if semanas:
         df_filtrado = df_filtrado[df_filtrado['SEMANA_EPIDEMIOLOGICA'].isin(semanas)]
 
+# 2. Sexo
 if 'SEXO' in df_filtrado.columns:
     sexos = st.sidebar.multiselect("Sexo", df['SEXO'].dropna().unique())
     if sexos:
         df_filtrado = df_filtrado[df_filtrado['SEXO'].isin(sexos)]
 
-# FILTRO DE FAIXA ETÁRIA (Corrigido e Ordenado)
+# 3. FILTRO DE FAIXA ETÁRIA 
 if 'FAIXA_ETARIA' in df_filtrado.columns:
     faixas_presentes = df['FAIXA_ETARIA'].dropna().unique().tolist()
     faixas_ordenadas = [f for f in ORDEM_FAIXA_ETARIA if f in faixas_presentes]
@@ -129,22 +129,25 @@ if 'FAIXA_ETARIA' in df_filtrado.columns:
     if faixas:
         df_filtrado = df_filtrado[df_filtrado['FAIXA_ETARIA'].isin(faixas)]
 
-# FILTRO DE CLASSIFICAÇÃO (Agora usando CLASSIFICACAO sem acento)
+# 4. FILTRO DE CLASSIFICAÇÃO FINAL (Posição desejada: entre Faixa Etária e Evolução)
 if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
     classificacoes = st.sidebar.multiselect("Classificação Final", df['CLASSIFICACAO_FINAL'].dropna().unique())
     if classificacoes:
         df_filtrado = df_filtrado[df_filtrado['CLASSIFICACAO_FINAL'].isin(classificacoes)]
         
+# 5. EVOLUÇÃO DO CASO
 if 'EVOLUCAO' in df_filtrado.columns:
     evolucoes = st.sidebar.multiselect("Evolução do Caso", df['EVOLUCAO'].dropna().unique())
     if evolucoes:
         df_filtrado = df_filtrado[df_filtrado['EVOLUCAO'].isin(evolucoes)]
 
+# 6. ESCOLARIDADE
 if 'ESCOLARIDADE' in df_filtrado.columns:
     escolaridades = st.sidebar.multiselect("Escolaridade", df['ESCOLARIDADE'].dropna().unique())
     if escolaridades:
         df_filtrado = df_filtrado[df_filtrado['ESCOLARIDADE'].isin(escolaridades)]
 
+# 7. BAIRRO
 if 'BAIRRO' in df_filtrado.columns:
     bairros = st.sidebar.multiselect("Bairro", sorted(df['BAIRRO'].dropna().unique()))
     if bairros:
