@@ -23,29 +23,26 @@ COLUNA_MAP = {
     'DISTRITO': 'DISTRITO'
 }
 
-
 # ========= FUNÇÃO DE CARREGAR DADOS =========
 @st.cache_data
 def carregar_dados():
     url = "https://docs.google.com/spreadsheets/d/1bdHetdGEXLgXv7A2aGvOaItKxiAuyg0Ip0UER1BjjOg/export?format=csv"
     
     try:
-        # Se houver linhas de cabeçalho extras, ajuste o skiprows=N
+        # Tenta ler o CSV (pode-se adicionar skiprows=N se houver linhas de título extras)
         df = pd.read_csv(url)
     except Exception as e:
-        st.error(f"❌ Erro de conexão. Verifique o compartilhamento da planilha ('Qualquer pessoa com o link pode visualizar').")
-        st.error(f"Detalhes do erro: {e}")
+        st.error(f"❌ Erro de conexão. Verifique o compartilhamento da planilha.")
         st.stop()
         
     # --- Passo de Limpeza e Padronização de Colunas ---
     df.columns = [col.strip().upper().replace(' ', '_').replace('/', '_') for col in df.columns]
-
     df.rename(columns={k.strip().upper().replace(' ', '_').replace('/', '_'): v for k, v in COLUNA_MAP.items()}, inplace=True)
 
     # Converter datas
     for col in ['DATA_NOTIFICACAO', 'DATA_SINTOMAS']:
         if col in df.columns:
-            # Garante que as datas inválidas são transformadas em NaT para o filtro funcionar
+            # Garante que as datas inválidas são transformadas em NaT
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
     return df
@@ -53,56 +50,60 @@ def carregar_dados():
 df = carregar_dados()
 
 if df.empty:
-    st.warning("O DataFrame está vazio. Verifique a fonte de dados.")
+    st.warning("O DataFrame está vazio.")
     st.stop()
 
 
-# ========= FILTROS NA BARRA LATERAL (MELHORADOS) =========
+# ========= FILTROS NA BARRA LATERAL (CORREÇÃO DE NaT) =========
 st.sidebar.header("🔎 Filtros")
 
 df_filtrado = df.copy()
 
-# --- Filtros de Período (Novo) ---
+# --- Filtros de Período (NOVO: Permite datas NaT) ---
 st.sidebar.subheader("Período de Notificação")
-if 'DATA_NOTIFICACAO' in df_filtrado.columns:
+if 'DATA_NOTIFICACAO' in df_filtrado.columns and not df_filtrado['DATA_NOTIFICACAO'].isnull().all():
     data_min_notif = df_filtrado['DATA_NOTIFICACAO'].min()
     data_max_notif = df_filtrado['DATA_NOTIFICACAO'].max()
     
+    # Usa a data mínima e máxima válida
     if pd.notna(data_min_notif) and pd.notna(data_max_notif):
         data_inicio, data_fim = st.sidebar.date_input(
-            "Selecione o Intervalo",
+            "Intervalo da Notificação",
             value=[data_min_notif.date(), data_max_notif.date()],
             min_value=data_min_notif.date(),
             max_value=data_max_notif.date(),
             key='filtro_notificacao'
         )
-        # Aplicar filtro de data
+        
+        # CORREÇÃO CRUCIAL: Inclui datas NaT (isnull()) ou datas dentro do intervalo
         df_filtrado = df_filtrado[
             (df_filtrado['DATA_NOTIFICACAO'].dt.date >= data_inicio) & 
-            (df_filtrado['DATA_NOTIFICACAO'].dt.date <= data_fim)
+            (df_filtrado['DATA_NOTIFICACAO'].dt.date <= data_fim) |
+            df_filtrado['DATA_NOTIFICACAO'].isnull() 
         ]
         
 st.sidebar.subheader("Período de Sintomas")
-if 'DATA_SINTOMAS' in df_filtrado.columns:
+if 'DATA_SINTOMAS' in df_filtrado.columns and not df_filtrado['DATA_SINTOMAS'].isnull().all():
     data_min_sintoma = df_filtrado['DATA_SINTOMAS'].min()
     data_max_sintoma = df_filtrado['DATA_SINTOMAS'].max()
 
     if pd.notna(data_min_sintoma) and pd.notna(data_max_sintoma):
         data_inicio_sint, data_fim_sint = st.sidebar.date_input(
-            "Selecione o Intervalo",
+            "Intervalo dos Sintomas",
             value=[data_min_sintoma.date(), data_max_sintoma.date()],
             min_value=data_min_sintoma.date(),
             max_value=data_max_sintoma.date(),
             key='filtro_sintomas'
         )
-        # Aplicar filtro de data
+        # CORREÇÃO CRUCIAL: Inclui datas NaT (isnull()) ou datas dentro do intervalo
         df_filtrado = df_filtrado[
             (df_filtrado['DATA_SINTOMAS'].dt.date >= data_inicio_sint) & 
-            (df_filtrado['DATA_SINTOMAS'].dt.date <= data_fim_sint)
+            (df_filtrado['DATA_SINTOMAS'].dt.date <= data_fim_sint) |
+            df_filtrado['DATA_SINTOMAS'].isnull()
         ]
 
 st.sidebar.markdown("---")
-# --- Outros Filtros (Completando o Pedido) ---
+# --- Outros Filtros ---
 if 'SEXO' in df_filtrado.columns:
     sexos = st.sidebar.multiselect("Sexo", df['SEXO'].dropna().unique())
     if sexos:
@@ -134,17 +135,24 @@ if df_filtrado.empty:
     st.stop()
 
 
-# ========= INDICADORES PRINCIPAIS (CARDS) =========
+# ========= INDICADORES PRINCIPAIS (CARDS - CORRIGIDO) =========
 st.header("Resumo dos Indicadores")
 
-# FIX: Inicializa variáveis para evitar o NameError
+# Inicializa variáveis para evitar o NameError e garantir o cálculo da letalidade
 confirmados = 0 
 obitos = 0
+descartados = 0 
 
-col1, col2, col3, col4 = st.columns(4)
+# Dividindo o espaço em 5 colunas
+col0, col1, col2, col3, col4 = st.columns(5) 
 
-total_notificados = len(df_filtrado)
-col1.metric("Casos Notificados", total_notificados)
+# --- NOVO CARTÃO: Total Geral da Base (mostra os 1.292) ---
+total_base = len(df) 
+col0.metric("Total Geral da Base", total_base) 
+
+# --- Casos Filtrados (Mostra o número após a aplicação dos filtros) ---
+total_filtrado = len(df_filtrado)
+col1.metric("Casos Filtrados", total_filtrado) 
 
 if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
     confirmados = (df_filtrado['CLASSIFICACAO_FINAL'].str.upper().str.strip() == "CONFIRMADO").sum()
@@ -154,23 +162,21 @@ if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
 
 if 'EVOLUCAO' in df_filtrado.columns:
     obitos = (df_filtrado['EVOLUCAO'].str.upper().str.contains("ÓBITO", na=False)).sum()
-    col_obito = col4 if 'CLASSIFICACAO_FINAL' in df_filtrado.columns else col3 # Posiciona corretamente
-    col_obito.metric("Óbitos", obitos)
 
 # Indicador de Taxa de Letalidade
 if confirmados > 0:
     letalidade = (obitos / confirmados) * 100
-    st.columns(4)[3].metric("Taxa de Letalidade (%)", f"{letalidade:.2f}%")
+    col4.metric("Taxa de Letalidade (%)", f"{letalidade:.2f}% ({obitos} óbitos)")
 else:
-    st.columns(4)[3].metric("Taxa de Letalidade (%)", "N/A")
+    col4.metric("Taxa de Letalidade (%)", "N/A")
 
 
 # ========= GRÁFICOS =========
 
-# --- 1. Casos por Semana Epidemiológica ---
 st.subheader("📈 Análise Temporal e Geográfica")
 col_graf1, col_graf2 = st.columns(2)
 
+# --- 1. Casos por Semana Epidemiológica ---
 if 'SEMANA_EPIDEMIOLOGICA' in df_filtrado.columns:
     df_semanal = df_filtrado.groupby("SEMANA_EPIDEMIOLOGICA").size().reset_index(name="Casos")
     fig_sem = px.line(
@@ -182,7 +188,7 @@ if 'SEMANA_EPIDEMIOLOGICA' in df_filtrado.columns:
     )
     col_graf1.plotly_chart(fig_sem, use_container_width=True)
 
-# --- 2. Distribuição por Distrito (Novo) ---
+# --- 2. Distribuição por Distrito ---
 if 'DISTRITO' in df_filtrado.columns:
     df_distrito = df_filtrado['DISTRITO'].value_counts().reset_index()
     df_distrito.columns = ['Distrito', 'Casos'] 
@@ -209,7 +215,7 @@ if 'BAIRRO' in df_filtrado.columns:
     )
     st.plotly_chart(fig_bairro, use_container_width=True)
 
-# --- 4. Relação Raça/Cor vs. Escolaridade (Novo e Cruzado) ---
+# --- 4. Relação Raça/Cor vs. Escolaridade ---
 st.subheader("🎓 Perfil Social: Raça/Cor vs. Escolaridade")
 if 'RACA_COR' in df_filtrado.columns and 'ESCOLARIDADE' in df_filtrado.columns:
     df_cruzado = df_filtrado.groupby(['RACA_COR', 'ESCOLARIDADE']).size().reset_index(name='Casos')
@@ -239,7 +245,6 @@ for s in sintomas_e_comorbidades:
     if s.upper() in df_filtrado.columns:
         count = (df_filtrado[s.upper()].astype(str).str.upper().str.strip() == "SIM").sum()
         if count > 0:
-            # Renomeia para o nome completo e sem underscore para exibição
             nome_display = s.replace('_', ' ').capitalize()
             presenca_data.append({"Item": nome_display, "Casos": count})
 
