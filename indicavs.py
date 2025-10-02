@@ -121,17 +121,16 @@ if 'SEXO' in df_filtrado.columns:
     if sexos:
         df_filtrado = df_filtrado[df_filtrado['SEXO'].isin(sexos)]
 
-# CORREÇÃO: Ordenação da Faixa Etária (usando a nova lista ORDEM_FAIXA_ETARIA)
+# FILTRO DE FAIXA ETÁRIA (Corrigido e Ordenado)
 if 'FAIXA_ETARIA' in df_filtrado.columns:
     faixas_presentes = df['FAIXA_ETARIA'].dropna().unique().tolist()
-    
-    # Filtra e ordena as faixas presentes usando a ordem manual definida
     faixas_ordenadas = [f for f in ORDEM_FAIXA_ETARIA if f in faixas_presentes]
     
-    faixas = st.sidebar.multiselect("Faixa Etária", faixas_ordenadas) # Usa a lista ordenada
+    faixas = st.sidebar.multiselect("Faixa Etária", faixas_ordenadas) 
     if faixas:
         df_filtrado = df_filtrado[df_filtrado['FAIXA_ETARIA'].isin(faixas)]
 
+# FILTRO DE CLASSIFICAÇÃO (Já está aqui!)
 if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
     classificacoes = st.sidebar.multiselect("Classificação Final", df['CLASSIFICACAO_FINAL'].dropna().unique())
     if classificacoes:
