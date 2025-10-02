@@ -17,7 +17,7 @@ COLUNA_MAP = {
     'FA': 'FAIXA_ETARIA', # Manter o nome FA para mapear para FAIXA_ETARIA
     'BAIRRO RESIDÊNCIA': 'BAIRRO',
     'EVOLUÇÃO DO CASO': 'EVOLUCAO',
-    'CLASSIFICACÃO': 'CLASSIFICACAO_FINAL', # CHAVE CORRIGIDA
+    'CLASSIFICAÇÃO': 'CLASSIFICACAO_FINAL', # CORREÇÃO APLICADA AQUI (Assumindo CLASSIFICAÇÃO é o cabeçalho da coluna AM)
     'RAÇA/COR': 'RACA_COR',
     'ESCOLARIDADE': 'ESCOLARIDADE',
     'DISTRITO': 'DISTRITO'
@@ -109,7 +109,6 @@ st.sidebar.header("🔎 Filtros")
 df_filtrado = df.copy() 
 
 # --- Filtros Categóricos ---
-# ... (outros filtros mantidos) ...
 
 if 'SEMANA_EPIDEMIOLOGICA' in df_filtrado.columns:
     semanas = st.sidebar.multiselect("Semana Epidemiológica", sorted(df['SEMANA_EPIDEMIOLOGICA'].dropna().unique()))
@@ -130,7 +129,7 @@ if 'FAIXA_ETARIA' in df_filtrado.columns:
     if faixas:
         df_filtrado = df_filtrado[df_filtrado['FAIXA_ETARIA'].isin(faixas)]
 
-# FILTRO DE CLASSIFICAÇÃO (Deve funcionar agora)
+# FILTRO DE CLASSIFICAÇÃO (Deve funcionar agora, usando CLASSIFICACAO_FINAL)
 if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
     classificacoes = st.sidebar.multiselect("Classificação Final", df['CLASSIFICACAO_FINAL'].dropna().unique())
     if classificacoes:
