@@ -234,7 +234,7 @@ if 'BAIRRO' in df_filtrado.columns:
     st.plotly_chart(fig_bairro, use_container_width=True)
 
 # --- 4. Relação Raça/Cor vs. Escolaridade ---
-st.subheader("🎓 Perfil Social: Raça/Cor vs. Escolaridade")
+st.subheader("🎓 Perfil Social: Raça/Cor e Escolaridade")
 if 'RACA_COR' in df_filtrado.columns and 'ESCOLARIDADE' in df_filtrado.columns:
     df_cruzado = df_filtrado.groupby(['RACA_COR', 'ESCOLARIDADE']).size().reset_index(name='Casos')
 
