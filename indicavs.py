@@ -10,15 +10,17 @@ st.title("📊 Dashboard Epidemiológico Interativo")
 st.caption("Fonte: Google Sheets - Atualização automática")
 
 # Dicionário para padronizar nomes de colunas
+# CHAVES: Nomes de colunas APÓS a limpeza de acentos/espaços (e em UPPERCASE).
+# VALORES: Nomes finais usados no código.
 COLUNA_MAP = {
-    'SEMANA EPIDEMIOLÓGICA 2': 'SEMANA_EPIDEMIOLOGICA',
-    'DATA DE NOTIFICAÇÃO': 'DATA_NOTIFICACAO',
-    'DATA PRIMEIRO SINTOMAS': 'DATA_SINTOMAS',
-    'FA': 'FAIXA_ETARIA', # Manter o nome FA para mapear para FAIXA_ETARIA
-    'BAIRRO RESIDÊNCIA': 'BAIRRO',
-    'EVOLUÇÃO DO CASO': 'EVOLUCAO',
-    'CLASSIFCAÇÃO': 'CLASSIFICACAO_FINAL',
-    'RAÇA/COR': 'RACA_COR',
+    'SEMANA_EPIDEMIOLOGICA_2': 'SEMANA_EPIDEMIOLOGICA',
+    'DATA_DE_NOTIFICACAO': 'DATA_NOTIFICACAO',
+    'DATA_PRIMEIRO_SINTOMAS': 'DATA_SINTOMAS',
+    'FA': 'FAIXA_ETARIA', 
+    'BAIRRO_RESIDENCIA': 'BAIRRO',
+    'EVOLUCAO_DO_CASO': 'EVOLUCAO', # Mapeamento corrigido para o nome limpo
+    'CLASSIFICACAO_FINAL': 'CLASSIFICACAO_FINAL', # Mapeamento para sua coluna final
+    'RACA_COR': 'RACA_COR',
     'ESCOLARIDADE': 'ESCOLARIDADE',
     'DISTRITO': 'DISTRITO'
 }
@@ -29,14 +31,13 @@ ORDEM_FAIXA_ETARIA = [
     '5 a 9 anos', 
     '10 a 14 anos', 
     '15 a 19 anos', 
-    '20 a 39 anos', # Nova faixa agrupada
-    '40 a 59 anos', # Nova faixa agrupada
-    '60 anos ou mais', # Novo nome
-    'IGNORADO' # Mantido para dados ausentes
+    '20 a 39 anos', 
+    '40 a 59 anos', 
+    '60 anos ou mais', 
+    'IGNORADO'
 ]
 
 # DICIONÁRIO PARA AGRUPAR E PADRONIZAR AS FAIXAS ETÁRIAS ANTIGAS PARA AS NOVAS
-# VOCÊ PODE PRECISAR AJUSTAR AS CHAVES DESTE DICIONÁRIO PARA REFLETIR EXATAMENTE O QUE ESTÁ NA SUA PLANILHA.
 MAPEAMENTO_FAIXA_ETARIA = {
     '0 a 4': '1 a 4 anos',
     '1 a 4': '1 a 4 anos',
@@ -44,23 +45,30 @@ MAPEAMENTO_FAIXA_ETARIA = {
     '10 a 14': '10 a 14 anos',
     '15 a 19': '15 a 19 anos',
     
-    # Agrupando faixas etárias antigas nas novas faixas de 20 a 39
     '20 a 29': '20 a 39 anos',
     '30 a 39': '20 a 39 anos',
     
-    # Agrupando faixas etárias antigas nas novas faixas de 40 a 59
     '40 a 49': '40 a 59 anos',
     '50 a 59': '40 a 59 anos',
     
-    # Agrupando faixas etárias antigas na nova faixa de 60 ou mais
     '60 a 69': '60 anos ou mais',
     '70 a 79': '60 anos ou mais',
     '80 ou mais': '60 anos ou mais',
     'IGNORADO': 'IGNORADO',
-    # Adicione aqui outras variações que você tenha na planilha:
-    # 'INDEFINIDO': 'IGNORADO',
 }
 
+# FUNÇÃO DE LIMPEZA DE COLUNAS: Garante que acentos e espaços virem apenas letras e underscores
+def limpar_nome_coluna(col):
+    col_limpa = col.strip().upper().replace(' ', '_').replace('/', '_')
+    # Substitui acentos comuns por letras não acentuadas
+    replacements = {
+        'Ã': 'A', 'Õ': 'O', 'Ç': 'C', 
+        'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 
+        'Â': 'A', 'Ê': 'E', 'Ô': 'O'
+    }
+    for k, v in replacements.items():
+        col_limpa = col_limpa.replace(k, v)
+    return col_limpa
 
 # ========= FUNÇÃO DE CARREGAR DADOS =========
 @st.cache_data
@@ -74,18 +82,18 @@ def carregar_dados():
         st.stop()
         
     # --- Passo de Limpeza e Padronização de Colunas ---
-    df.columns = [col.strip().upper().replace(' ', '_').replace('/', '_') for col in df.columns]
-    df.rename(columns={k.strip().upper().replace(' ', '_').replace('/', '_'): v for k, v in COLUNA_MAP.items()}, inplace=True)
+    # 1. Aplica a limpeza robusta nos nomes de colunas do DataFrame (Chave no COLUNA_MAP)
+    df.columns = [limpar_nome_coluna(col) for col in df.columns]
+    
+    # 2. Renomeia as colunas usando o mapa (que usa as chaves limpas)
+    rename_dict = {col_limpa: nome_final for col_limpa, nome_final in COLUNA_MAP.items() if col_limpa in df.columns}
+    
+    df.rename(columns=rename_dict, inplace=True)
 
-    # --- NOVO PASSO: PADRONIZAÇÃO E AGRUPAMENTO DA FAIXA ETÁRIA ---
+    # --- PADRONIZAÇÃO E AGRUPAMENTO DA FAIXA ETÁRIA ---
     if 'FAIXA_ETARIA' in df.columns:
-        # 1. Converte a coluna para string e retira espaços (preparação para o mapeamento)
         df['FAIXA_ETARIA'] = df['FAIXA_ETARIA'].astype(str).str.strip()
-        
-        # 2. Aplica o mapeamento para as novas faixas e agrupa
         df['FAIXA_ETARIA'] = df['FAIXA_ETARIA'].replace(MAPEAMENTO_FAIXA_ETARIA)
-        
-        # 3. Substitui valores NaT/vazios restantes por 'IGNORADO'
         df['FAIXA_ETARIA'] = df['FAIXA_ETARIA'].fillna('IGNORADO')
         
 
@@ -103,50 +111,51 @@ if df.empty:
     st.stop()
 
 
-# ========= FILTROS NA BARRA LATERAL (FAIXA ETÁRIA ORDENADA) =========
+# ========= FILTROS NA BARRA LATERAL (ORDEM CORRETA) =========
 st.sidebar.header("🔎 Filtros")
 
 df_filtrado = df.copy() 
 
-# --- Filtros Categóricos ---
-# ... (outros filtros mantidos) ...
-
+# 1. Semana Epidemiológica
 if 'SEMANA_EPIDEMIOLOGICA' in df_filtrado.columns:
     semanas = st.sidebar.multiselect("Semana Epidemiológica", sorted(df['SEMANA_EPIDEMIOLOGICA'].dropna().unique()))
     if semanas:
         df_filtrado = df_filtrado[df_filtrado['SEMANA_EPIDEMIOLOGICA'].isin(semanas)]
 
+# 2. Sexo
 if 'SEXO' in df_filtrado.columns:
     sexos = st.sidebar.multiselect("Sexo", df['SEXO'].dropna().unique())
     if sexos:
         df_filtrado = df_filtrado[df_filtrado['SEXO'].isin(sexos)]
 
-# CORREÇÃO: Ordenação da Faixa Etária (usando a nova lista ORDEM_FAIXA_ETARIA)
+# 3. FILTRO DE FAIXA ETÁRIA 
 if 'FAIXA_ETARIA' in df_filtrado.columns:
     faixas_presentes = df['FAIXA_ETARIA'].dropna().unique().tolist()
-    
-    # Filtra e ordena as faixas presentes usando a ordem manual definida
     faixas_ordenadas = [f for f in ORDEM_FAIXA_ETARIA if f in faixas_presentes]
     
-    faixas = st.sidebar.multiselect("Faixa Etária", faixas_ordenadas) # Usa a lista ordenada
+    faixas = st.sidebar.multiselect("Faixa Etária", faixas_ordenadas) 
     if faixas:
         df_filtrado = df_filtrado[df_filtrado['FAIXA_ETARIA'].isin(faixas)]
 
+# 4. FILTRO DE CLASSIFICAÇÃO FINAL (INCLUÍDO E ESTABILIZADO)
 if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
     classificacoes = st.sidebar.multiselect("Classificação Final", df['CLASSIFICACAO_FINAL'].dropna().unique())
     if classificacoes:
         df_filtrado = df_filtrado[df_filtrado['CLASSIFICACAO_FINAL'].isin(classificacoes)]
         
+# 5. EVOLUÇÃO DO CASO (ESTABILIZADO)
 if 'EVOLUCAO' in df_filtrado.columns:
     evolucoes = st.sidebar.multiselect("Evolução do Caso", df['EVOLUCAO'].dropna().unique())
     if evolucoes:
         df_filtrado = df_filtrado[df_filtrado['EVOLUCAO'].isin(evolucoes)]
 
+# 6. ESCOLARIDADE
 if 'ESCOLARIDADE' in df_filtrado.columns:
     escolaridades = st.sidebar.multiselect("Escolaridade", df['ESCOLARIDADE'].dropna().unique())
     if escolaridades:
         df_filtrado = df_filtrado[df_filtrado['ESCOLARIDADE'].isin(escolaridades)]
 
+# 7. BAIRRO
 if 'BAIRRO' in df_filtrado.columns:
     bairros = st.sidebar.multiselect("Bairro", sorted(df['BAIRRO'].dropna().unique()))
     if bairros:
@@ -174,13 +183,13 @@ total_filtrado = len(df_filtrado)
 col1.metric("Casos Filtrados", total_filtrado) 
 
 if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
-    confirmados = (df_filtrado['CLASSIFICACAO_FINAL'].str.upper().str.strip() == "CONFIRMADO").sum()
-    descartados = (df_filtrado['CLASSIFICACAO_FINAL'].str.upper().str.strip() == "DESCARTADO").sum()
+    confirmados = (df_filtrado['CLASSIFICACAO_FINAL'].astype(str).str.upper().str.strip() == "CONFIRMADO").sum()
+    descartados = (df_filtrado['CLASSIFICACAO_FINAL'].astype(str).str.upper().str.strip() == "DESCARTADO").sum()
     col2.metric("Confirmados", confirmados)
     col3.metric("Descartados", descartados) 
 
 if 'EVOLUCAO' in df_filtrado.columns:
-    obitos = (df_filtrado['EVOLUCAO'].str.upper().str.contains("ÓBITO", na=False)).sum()
+    obitos = (df_filtrado['EVOLUCAO'].astype(str).str.upper().str.contains("ÓBITO", na=False)).sum()
 
 if confirmados > 0:
     letalidade = (obitos / confirmados) * 100
@@ -220,7 +229,7 @@ if 'DISTRITO' in df_filtrado.columns:
     col_graf2.plotly_chart(fig_distrito, use_container_width=True)
 
 # --- 3. Distribuição por Bairro ---
-st.subheader("🏘️ Distribuição por Bairro")
+st.subheader("🏘️ Distribuição das notificações por Bairro")
 if 'BAIRRO' in df_filtrado.columns:
     df_bairro = df_filtrado['BAIRRO'].value_counts().reset_index()
     df_bairro.columns = ['Bairro', 'Casos'] 
@@ -261,6 +270,7 @@ sintomas_e_comorbidades = [
 presenca_data = []
 for s in sintomas_e_comorbidades:
     if s.upper() in df_filtrado.columns:
+        # Garante que a coluna está em string antes de upper/strip/comparação
         count = (df_filtrado[s.upper()].astype(str).str.upper().str.strip() == "SIM").sum()
         if count > 0:
             nome_display = s.replace('_', ' ').capitalize()
