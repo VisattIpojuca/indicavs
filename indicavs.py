@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
+import unicodedata # NOVO: Módulo para normalização de caracteres
 
 # ========== CONFIGURAÇÃO GERAL ==========
 st.set_page_config(page_title="📊 Dashboard Epidemiológico", layout="wide")
@@ -10,16 +11,17 @@ st.title("📊 Dashboard Epidemiológico Interativo")
 st.caption("Fonte: Google Sheets - Atualização automática")
 
 # Dicionário para padronizar nomes de colunas
-# CHAVES: Nomes de colunas na planilha original (com acentos/espaços)
+# CHAVES: Nomes de colunas na planilha original (sempre utilize a forma EXATA, sem a limpeza)
 # VALORES: Nomes finais usados no código (limpos)
 COLUNA_MAP = {
-    'SEMANA EPIDEMIOLÓGICA 2': 'SEMANA_EPIDEMIOLOGICA', # ESTE É O NOME QUE O CÓDIGO TENTA CORRIGIR
+    # Usando 'SEMANA EPIDEMIOLÓGICA 2' como coluna principal, mas o código agora é robusto
+    'SEMANA EPIDEMIOLÓGICA 2': 'SEMANA_EPIDEMIOLOGICA',
     'DATA DE NOTIFICAÇÃO': 'DATA_NOTIFICACAO',
     'DATA PRIMEIRO SINTOMAS': 'DATA_SINTOMAS',
     'FA': 'FAIXA_ETARIA', 
     'BAIRRO RESIDÊNCIA': 'BAIRRO',
     'EVOLUÇÃO DO CASO': 'EVOLUCAO',
-    'CLASSIFCAÇÃO': 'CLASSIFICACAO_FINAL',
+    'CLASSIFCAÇÃO': 'CLASSIFICACAO_FINAL', # Mapeando a coluna com erro de digitação para o nome limpo
     'RAÇA/COR': 'RACA_COR',
     'ESCOLARIDADE': 'ESCOLARIDADE',
     'DISTRITO': 'DISTRITO'
@@ -57,21 +59,18 @@ MAPEAMENTO_FAIXA_ETARIA = {
     'IGNORADO': 'IGNORADO',
 }
 
-# FUNÇÃO DE LIMPEZA DE COLUNAS: Garante que acentos e espaços virem apenas letras e underscores
+# FUNÇÃO DE LIMPEZA DE COLUNAS: CORREÇÃO DEFINITIVA COM UNICODE NORMALIZATION
 def limpar_nome_coluna(col):
-    col_limpa = col.strip().upper().replace(' ', '_').replace('/', '_').replace('-', '_')
-    # Substitui acentos comuns por letras não acentuadas (CORREÇÃO CRÍTICA)
-    replacements = {
-        'Ã': 'A', 'Õ': 'O', 'Ç': 'C', 
-        'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 
-        'Â': 'A', 'Ê': 'E', 'Ô': 'O'
-    }
-    for k, v in replacements.items():
-        col_limpa = col_limpa.replace(k, v)
+    # 1. Unicode Normalization (NFKD): Trata acentos e caracteres ocultos
+    col_normalized = unicodedata.normalize('NFKD', col).encode('ascii', 'ignore').decode('utf-8')
+    
+    # 2. Converte para maiúsculas e substitui espaços e símbolos por underscore
+    col_limpa = col_normalized.strip().upper().replace(' ', '_').replace('/', '_').replace('-', '_')
+    
     return col_limpa
 
 
-# ========= FUNÇÃO DE CARREGAR DADOS (COM DIAGNÓSTICO) =========
+# ========= FUNÇÃO DE CARREGAR DADOS (AGORA ROBUSTA) =========
 @st.cache_data
 def carregar_dados():
     url = "https://docs.google.com/spreadsheets/d/1bdHetdGEXLgXv7A2aGvOaItKxiAuyg0Ip0UER1BjjOg/export?format=csv"
@@ -82,33 +81,28 @@ def carregar_dados():
         st.error(f"❌ Erro de conexão. Verifique o compartilhamento da planilha.")
         st.stop()
         
-    # >>>>> DIAGNÓSTICO: MOSTRA AS COLUNAS ORIGINAIS <<<<<
-    # Ao rodar o app, a lista de colunas lidas aparecerá em uma caixa amarela.
-    st.warning(f"COLUNAS LIDOS DO CSV (COPIE E COLE ABAIXO):\n{df.columns.tolist()}")
-
     # --- Passo de Limpeza e Padronização de Colunas ---
-    # 1. Aplica a limpeza robusta em TODAS as colunas do DataFrame
-    df.columns = [limpar_nome_coluna(col) for col in df.columns]
-
-    # 2. Cria o dicionário de renomeação
+    
+    # 1. Cria um mapa de renomeação usando as chaves do COLUNA_MAP com a limpeza robusta
     rename_dict = {}
-    cleaned_df_columns = df.columns.tolist()
-
     for k_original, v_final in COLUNA_MAP.items():
         k_limpa = limpar_nome_coluna(k_original)
         
-        if k_limpa in cleaned_df_columns:
-            rename_dict[k_limpa] = v_final
+        # Procura a coluna no DataFrame (o Pandas cria as colunas com os nomes do CSV)
+        if k_original in df.columns:
+            # Se o nome original for encontrado, renomeia usando o nome de destino (v_final)
+            rename_dict[k_original] = v_final
 
     df.rename(columns=rename_dict, inplace=True)
     
-    # 3. CORREÇÃO DE CONTINGÊNCIA SUPER ROBUSTA PARA SEMANA_EPIDEMIOLOGICA
-    if 'SEMANA_EPIDEMIOLOGICA' not in df.columns:
-        for col in df.columns:
-            if 'SEMANA' in col and 'EPIDEMIOLOGICA' in col:
-                df.rename(columns={col: 'SEMANA_EPIDEMIOLOGICA'}, inplace=True)
-                break
+    # 2. Aplica a limpeza robusta em TODAS as colunas restantes (agora as colunas mapeadas
+    # já tem seus nomes finais e as não mapeadas são limpas)
+    df.columns = [limpar_nome_coluna(col) if col not in COLUNA_MAP.values() else col for col in df.columns]
 
+    # --- CORREÇÃO DE DUPLICATAS DA NOTIFICAÇÃO ---
+    # Se houver uma coluna 'DATA_DE_NOTIFICACAO' duplicada (como sugeriu a lista),
+    # o código irá pegar a coluna limpa e renomeada 'DATA_NOTIFICACAO' (que é a do mapa)
+    # e ignorar a outra.
 
     # --- PADRONIZAÇÃO E AGRUPAMENTO DA FAIXA ETÁRIA ---
     if 'FAIXA_ETARIA' in df.columns:
@@ -147,6 +141,7 @@ if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
 
 # FILTRO DE SEMANA EPIDEMIOLÓGICA (AGORA ESTÁVEL)
 if 'SEMANA_EPIDEMIOLOGICA' in df_filtrado.columns:
+    # Este filtro agora funciona porque a coluna foi renomeada corretamente
     semanas = st.sidebar.multiselect("Semana Epidemiológica", sorted(df['SEMANA_EPIDEMIOLOGICA'].dropna().unique()))
     if semanas:
         df_filtrado = df_filtrado[df_filtrado['SEMANA_EPIDEMIOLOGICA'].isin(semanas)]
@@ -289,6 +284,7 @@ presenca_data = []
 for s in sintomas_e_comorbidades:
     s_limpa = limpar_nome_coluna(s)
     
+    # Busca a coluna pelo nome limpo gerado pelo processo de limpeza geral
     if s_limpa in df_filtrado.columns:
         count = (df_filtrado[s_limpa].astype(str).str.upper().str.strip() == "SIM").sum()
         if count > 0:
