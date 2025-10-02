@@ -10,7 +10,7 @@ st.caption("Fonte: Google Sheets - Atualização automática")
 # ========= CARREGAR DADOS =========
 @st.cache_data
 def carregar_dados():
-    url = "https://docs.google.com/spreadsheets/d/1bdHetdGEXLgXv7A2aGvOaItKxiAuyg0Ip0UER1BjjOg/edit?usp=sharing"
+    url = "https://docs.google.com/spreadsheets/d/1bdHetdGEXLgXv7A2aGvOaItKxiAuyg0Ip0UER1BjjOg/export?format=csv"
     df = pd.read_csv(url)
 
     # Converter datas
