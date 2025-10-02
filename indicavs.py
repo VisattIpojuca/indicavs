@@ -17,7 +17,7 @@ COLUNA_MAP = {
     'FA': 'FAIXA_ETARIA', # Manter o nome FA para mapear para FAIXA_ETARIA
     'BAIRRO RESIDÊNCIA': 'BAIRRO',
     'EVOLUÇÃO DO CASO': 'EVOLUCAO',
-    'CLASSIFICACAO': 'CLASSIFICACAO_FINAL', # Mapeamento da coluna AM (sem acento)
+    'CLASSIFICACAO': 'CLASSIFICACAO_FINAL', # Chave agora compatível com o tratamento de acento
     'RAÇA/COR': 'RACA_COR',
     'ESCOLARIDADE': 'ESCOLARIDADE',
     'DISTRITO': 'DISTRITO'
@@ -36,7 +36,6 @@ ORDEM_FAIXA_ETARIA = [
 ]
 
 # DICIONÁRIO PARA AGRUPAR E PADRONIZAR AS FAIXAS ETÁRIAS ANTIGAS PARA AS NOVAS
-# VOCÊ PODE PRECISAR AJUSTAR AS CHAVES DESTE DICIONÁRIO PARA REFLETIR EXATAMENTE O QUE ESTÁ NA SUA PLANILHA.
 MAPEAMENTO_FAIXA_ETARIA = {
     '0 a 4': '1 a 4 anos',
     '1 a 4': '1 a 4 anos',
@@ -57,12 +56,10 @@ MAPEAMENTO_FAIXA_ETARIA = {
     '70 a 79': '60 anos ou mais',
     '80 ou mais': '60 anos ou mais',
     'IGNORADO': 'IGNORADO',
-    # Adicione aqui outras variações que você tenha na planilha:
-    # 'INDEFINIDO': 'IGNORADO',
 }
 
 
-# ========= FUNÇÃO DE CARREGAR DADOS =========
+# ========= FUNÇÃO DE CARREGAR DADOS (COM CORREÇÃO DE ACENTO) =========
 @st.cache_data
 def carregar_dados():
     url = "https://docs.google.com/spreadsheets/d/1bdHetdGEXLgXv7A2aGvOaItKxiAuyg0Ip0UER1BjjOg/export?format=csv"
@@ -74,18 +71,22 @@ def carregar_dados():
         st.stop()
         
     # --- Passo de Limpeza e Padronização de Colunas ---
-    df.columns = [col.strip().upper().replace(' ', '_').replace('/', '_') for col in df.columns]
+    # 1. Correção robusta de acentos e caracteres antes da renomeação
+    df.columns = [
+        col.strip().upper()
+           .replace(' ', '_').replace('/', '_')
+           .replace('Ã', 'A') # FORÇA a remoção do acento do A, ex: CLASSIFICÃÇAO -> CLASSIFICACAO
+           .replace('Ç', 'C') # Força a remoção do cedilha
+        for col in df.columns
+    ]
+    
+    # 2. Renomeia colunas usando o mapa corrigido
     df.rename(columns={k.strip().upper().replace(' ', '_').replace('/', '_'): v for k, v in COLUNA_MAP.items()}, inplace=True)
 
     # --- NOVO PASSO: PADRONIZAÇÃO E AGRUPAMENTO DA FAIXA ETÁRIA ---
     if 'FAIXA_ETARIA' in df.columns:
-        # 1. Converte a coluna para string e retira espaços (preparação para o mapeamento)
         df['FAIXA_ETARIA'] = df['FAIXA_ETARIA'].astype(str).str.strip()
-        
-        # 2. Aplica o mapeamento para as novas faixas e agrupa
         df['FAIXA_ETARIA'] = df['FAIXA_ETARIA'].replace(MAPEAMENTO_FAIXA_ETARIA)
-        
-        # 3. Substitui valores NaT/vazios restantes por 'IGNORADO'
         df['FAIXA_ETARIA'] = df['FAIXA_ETARIA'].fillna('IGNORADO')
         
 
@@ -103,7 +104,7 @@ if df.empty:
     st.stop()
 
 
-# ========= FILTROS NA BARRA LATERAL (FAIXA ETÁRIA ORDENADA) =========
+# ========= FILTROS NA BARRA LATERAL (ORDEM DESEJADA) =========
 st.sidebar.header("🔎 Filtros")
 
 df_filtrado = df.copy() 
@@ -129,13 +130,13 @@ if 'FAIXA_ETARIA' in df_filtrado.columns:
     if faixas:
         df_filtrado = df_filtrado[df_filtrado['FAIXA_ETARIA'].isin(faixas)]
 
-# 4. FILTRO DE CLASSIFICAÇÃO FINAL (Posição desejada: entre Faixa Etária e Evolução)
+# 4. FILTRO DE CLASSIFICAÇÃO FINAL (Posição solicitada)
 if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
     classificacoes = st.sidebar.multiselect("Classificação Final", df['CLASSIFICACAO_FINAL'].dropna().unique())
     if classificacoes:
         df_filtrado = df_filtrado[df_filtrado['CLASSIFICACAO_FINAL'].isin(classificacoes)]
         
-# 5. EVOLUÇÃO DO CASO
+# 5. EVOLUÇÃO DO CASO (Após a Classificação Final)
 if 'EVOLUCAO' in df_filtrado.columns:
     evolucoes = st.sidebar.multiselect("Evolução do Caso", df['EVOLUCAO'].dropna().unique())
     if evolucoes:
