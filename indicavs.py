@@ -10,6 +10,8 @@ st.title("📊 Dashboard Epidemiológico Interativo")
 st.caption("Fonte: Google Sheets - Atualização automática")
 
 # Dicionário para padronizar nomes de colunas
+# CHAVES: Nomes de colunas na planilha original (com acentos/espaços)
+# VALORES: Nomes finais usados no código (limpos)
 COLUNA_MAP = {
     'SEMANA EPIDEMIOLÓGICA 2': 'SEMANA_EPIDEMIOLOGICA',
     'DATA DE NOTIFICAÇÃO': 'DATA_NOTIFICACAO',
@@ -36,7 +38,6 @@ ORDEM_FAIXA_ETARIA = [
 ]
 
 # DICIONÁRIO PARA AGRUPAR E PADRONIZAR AS FAIXAS ETÁRIAS ANTIGAS PARA AS NOVAS
-# VOCÊ PODE PRECISAR AJUSTAR AS CHAVES DESTE DICIONÁRIO PARA REFLETIR EXATAMENTE O QUE ESTÁ NA SUA PLANILHA.
 MAPEAMENTO_FAIXA_ETARIA = {
     '0 a 4': '1 a 4 anos',
     '1 a 4': '1 a 4 anos',
@@ -61,6 +62,19 @@ MAPEAMENTO_FAIXA_ETARIA = {
     # 'INDEFINIDO': 'IGNORADO',
 }
 
+# FUNÇÃO DE LIMPEZA DE COLUNAS: Garante que acentos e espaços virem apenas letras e underscores
+def limpar_nome_coluna(col):
+    col_limpa = col.strip().upper().replace(' ', '_').replace('/', '_')
+    # Substitui acentos comuns por letras não acentuadas (CRITICAL FIX)
+    replacements = {
+        'Ã': 'A', 'Õ': 'O', 'Ç': 'C', 
+        'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 
+        'Â': 'A', 'Ê': 'E', 'Ô': 'O'
+    }
+    for k, v in replacements.items():
+        col_limpa = col_limpa.replace(k, v)
+    return col_limpa
+
 
 # ========= FUNÇÃO DE CARREGAR DADOS =========
 @st.cache_data
@@ -74,10 +88,19 @@ def carregar_dados():
         st.stop()
         
     # --- Passo de Limpeza e Padronização de Colunas ---
-    df.columns = [col.strip().upper().replace(' ', '_').replace('/', '_') for col in df.columns]
-    df.rename(columns={k.strip().upper().replace(' ', '_').replace('/', '_'): v for k, v in COLUNA_MAP.items()}, inplace=True)
+    # 1. Aplica a limpeza robusta em TODAS as colunas do DataFrame
+    df.columns = [limpar_nome_coluna(col) for col in df.columns]
 
-    # --- NOVO PASSO: PADRONIZAÇÃO E AGRUPAMENTO DA FAIXA ETÁRIA ---
+    # 2. Cria o dicionário de renomeação usando as chaves do COLUNA_MAP limpas (para garantir o match)
+    rename_dict = {}
+    for k_original, v_final in COLUNA_MAP.items():
+        k_limpa = limpar_nome_coluna(k_original)
+        if k_limpa in df.columns:
+            rename_dict[k_limpa] = v_final
+
+    df.rename(columns=rename_dict, inplace=True)
+
+    # --- PADRONIZAÇÃO E AGRUPAMENTO DA FAIXA ETÁRIA ---
     if 'FAIXA_ETARIA' in df.columns:
         # 1. Converte a coluna para string e retira espaços (preparação para o mapeamento)
         df['FAIXA_ETARIA'] = df['FAIXA_ETARIA'].astype(str).str.strip()
@@ -108,8 +131,14 @@ st.sidebar.header("🔎 Filtros")
 
 df_filtrado = df.copy() 
 
+# NOVO: Filtro Classificação Final (Separado e no topo)
+if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
+    classificacoes = st.sidebar.multiselect("Classificação Final", df['CLASSIFICACAO_FINAL'].dropna().unique())
+    if classificacoes:
+        df_filtrado = df_filtrado[df_filtrado['CLASSIFICACAO_FINAL'].isin(classificacoes)]
+        
+
 # --- Filtros Categóricos ---
-# ... (outros filtros mantidos) ...
 
 if 'SEMANA_EPIDEMIOLOGICA' in df_filtrado.columns:
     semanas = st.sidebar.multiselect("Semana Epidemiológica", sorted(df['SEMANA_EPIDEMIOLOGICA'].dropna().unique()))
@@ -132,12 +161,8 @@ if 'FAIXA_ETARIA' in df_filtrado.columns:
     if faixas:
         df_filtrado = df_filtrado[df_filtrado['FAIXA_ETARIA'].isin(faixas)]
 
-# FILTRO DE CLASSIFICAÇÃO FINAL
-if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
-    classificacoes = st.sidebar.multiselect("Classificação Final", df['CLASSIFICACAO_FINAL'].dropna().unique())
-    if classificacoes:
-        df_filtrado = df_filtrado[df_filtrado['CLASSIFICACAO_FINAL'].isin(classificacoes)]
-        
+# O filtro de Classificação Final foi removido daqui
+
 if 'EVOLUCAO' in df_filtrado.columns:
     evolucoes = st.sidebar.multiselect("Evolução do Caso", df['EVOLUCAO'].dropna().unique())
     if evolucoes:
@@ -172,13 +197,15 @@ total_filtrado = len(df_filtrado)
 col1.metric("Notificações no período", total_filtrado) 
 
 if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
-    confirmados = (df_filtrado['CLASSIFICACAO_FINAL'].str.upper().str.strip() == "CONFIRMADO").sum()
-    descartados = (df_filtrado['CLASSIFICACAO_FINAL'].str.upper().str.strip() == "DESCARTADO").sum()
+    # Garante que a coluna é string para evitar erros de comparação
+    confirmados = (df_filtrado['CLASSIFICACAO_FINAL'].astype(str).str.upper().str.strip() == "CONFIRMADO").sum()
+    descartados = (df_filtrado['CLASSIFICACAO_FINAL'].astype(str).str.upper().str.strip() == "DESCARTADO").sum()
     col2.metric("Confirmados", confirmados)
     col3.metric("Descartados", descartados) 
 
 if 'EVOLUCAO' in df_filtrado.columns:
-    obitos = (df_filtrado['EVOLUCAO'].str.upper().str.contains("ÓBITO", na=False)).sum()
+    # Garante que a coluna é string
+    obitos = (df_filtrado['EVOLUCAO'].astype(str).str.upper().str.contains("ÓBITO", na=False)).sum()
 
 if confirmados > 0:
     letalidade = (obitos / confirmados) * 100
@@ -249,17 +276,24 @@ if 'RACA_COR' in df_filtrado.columns and 'ESCOLARIDADE' in df_filtrado.columns:
 
 # --- 5. Sintomas e Comorbidades Mais Frequentes ---
 st.subheader("🧩 Sintomas e Comorbidades")
+# Os nomes das colunas aqui agora também estão sujeitos à limpeza robusta
 sintomas_e_comorbidades = [
     "FEBRE", "MIALGIA", "CEFALEIA", "EXANTEMA", "VOMITO", "NAUSEA",
     "DOR_COSTAS", "CONJUNTVITE", "ARTRITE", "ARTRALGIA", "PETEQUIAS",
     "LEUCOPENIA", "LAÇO", "DOR_RETRO", "DIABETES", "HEMATOLOGICAS",
-    "HEPATOPATIAS", "RENAL", "HIPERTENSÃO", "ACIDO_PEPT", "AUTO_IMUNE"
+    "HEPATOPATIAS", "RENAL", "HIPERTENSAO", "ACIDO_PEPT", "AUTO_IMUNE" # HIPERTENSÃO foi limpo para HIPERTENSAO
 ]
 
 presenca_data = []
 for s in sintomas_e_comorbidades:
-    if s.upper() in df_filtrado.columns:
-        count = (df_filtrado[s.upper()].astype(str).str.upper().str.strip() == "SIM").sum()
+    # CRITICAL: O nome da coluna do DataFrame (df_filtrado.columns) foi limpo para remover acentos.
+    # Portanto, a chave de busca (s.upper()) também precisa estar limpa, se for o caso.
+    # Ex: LAÇO (com cê cedilha) será lido como L_A_C_O_ (dependendo do CSV) e limpo para LACO. 
+    # Vou forçar a limpeza da chave de busca para maior consistência.
+    s_limpa = limpar_nome_coluna(s)
+    
+    if s_limpa in df_filtrado.columns:
+        count = (df_filtrado[s_limpa].astype(str).str.upper().str.strip() == "SIM").sum()
         if count > 0:
             nome_display = s.replace('_', ' ').capitalize()
             presenca_data.append({"Item": nome_display, "Casos": count})
