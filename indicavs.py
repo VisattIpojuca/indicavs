@@ -217,7 +217,7 @@ if 'DISTRITO' in df_filtrado.columns:
     col_graf2.plotly_chart(fig_distrito, use_container_width=True)
 
 # --- 3. Distribuição por Bairro ---
-st.subheader("🏘️ Distribuição por Bairro")
+st.subheader("🏘️ Distribuição das notificações por Bairro")
 if 'BAIRRO' in df_filtrado.columns:
     df_bairro = df_filtrado['BAIRRO'].value_counts().reset_index()
     df_bairro.columns = ['Bairro', 'Casos'] 
