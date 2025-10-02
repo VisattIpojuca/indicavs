@@ -10,15 +10,15 @@ st.title("📊 Dashboard Epidemiológico Interativo")
 st.caption("Fonte: Google Sheets - Atualização automática")
 
 # Dicionário para padronizar nomes de colunas
-# O CAMPO CLASSIFICACAO_FINAL FOI REMOVIDO DO MAPA, POIS O NOME DA COLUNA NO SOURCE JÁ É O NOME FINAL
+# Chaves devem corresponder EXATAMENTE aos nomes da planilha (com acentos e espaços)
 COLUNA_MAP = {
     'SEMANA EPIDEMIOLÓGICA 2': 'SEMANA_EPIDEMIOLOGICA',
     'DATA DE NOTIFICAÇÃO': 'DATA_NOTIFICACAO',
     'DATA PRIMEIRO SINTOMAS': 'DATA_SINTOMAS',
     'FA': 'FAIXA_ETARIA', 
     'BAIRRO RESIDÊNCIA': 'BAIRRO',
-    'EVOLUÇÃO DO CASO': 'EVOLUCAO',
-    # 'CLASSIFICACAO': 'CLASSIFICACAO_FINAL', <-- REMOVIDO! A coluna já tem o nome CLASSIFICACAO_FINAL
+    'EVOLUÇÃO DO CASO': 'EVOLUCAO', # CHAVE CORRIGIDA: Usa o nome EXATO da coluna de origem (com acento no Ó)
+    # CLASSIFICACAO_FINAL não precisa mais de mapeamento, pois o nome já está correto na origem
     'RAÇA/COR': 'RACA_COR',
     'ESCOLARIDADE': 'ESCOLARIDADE',
     'DISTRITO': 'DISTRITO'
@@ -69,17 +69,23 @@ def carregar_dados():
         st.stop()
         
     # --- Passo de Limpeza e Padronização de Colunas ---
-    # Limpeza robusta (remove acentos, cedilha, e padroniza para UPPERCASE e UNDERSCORE)
+    # Limpeza robusta de acentos, cedilha, e padronização para UPPERCASE e UNDERSCORE
     df.columns = [
         col.strip().upper()
            .replace(' ', '_').replace('/', '_')
-           .replace('Ã', 'A') 
+           .replace('Ã', 'A').replace('Õ', 'O') 
            .replace('Ç', 'C') 
+           .replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U') 
+           .replace('Â', 'A').replace('Ê', 'E').replace('Ô', 'O') 
         for col in df.columns
     ]
     
-    # Renomeia as colunas restantes usando o mapa
-    df.rename(columns={k.strip().upper().replace(' ', '_').replace('/', '_'): v for k, v in COLUNA_MAP.items()}, inplace=True)
+    # Renomeia as colunas usando o mapa (as chaves do mapa também são limpas para corresponder)
+    df.rename(columns={k.strip().upper().replace(' ', '_').replace('/', '_')
+                        .replace('Ã', 'A').replace('Õ', 'O') 
+                        .replace('Ç', 'C') 
+                        .replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U') 
+                        .replace('Â', 'A').replace('Ê', 'E').replace('Ô', 'O'): v for k, v in COLUNA_MAP.items()}, inplace=True)
 
     # --- PADRONIZAÇÃO E AGRUPAMENTO DA FAIXA ETÁRIA ---
     if 'FAIXA_ETARIA' in df.columns:
