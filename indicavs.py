@@ -11,23 +11,17 @@ st.title("📊 Dashboard Epidemiológico Interativo")
 st.caption("Fonte: Google Sheets - Atualização automática")
 
 # Dicionário FINAL para padronizar nomes de colunas no DataFrame LIMPO.
-# Ele mapeia o nome limpo lido (que pode vir de uma duplicata) para o nome final desejado.
 FINAL_RENAME_MAP = {
-    # Assume que a coluna principal foi corrigida para este nome na planilha:
     'SEMANA_EPIDEMIOLOGICA': 'SEMANA_EPIDEMIOLOGICA',
-    'SEMANA_EPIDEMIOLOGICA_2': 'SEMANA_EPIDEMIOLOGICA', # Se houver duplicata, força o nome principal
-    
-    # Datas
+    'SEMANA_EPIDEMIOLOGICA_2': 'SEMANA_EPIDEMIOLOGICA',
     'DATA_NOTIFICACAO': 'DATA_NOTIFICACAO',
     'DATA_DE_NOTIFICACAO': 'DATA_NOTIFICACAO',
     'DATA_PRIMEIRO_SINTOMAS': 'DATA_SINTOMAS',
     'DATA_PRIMEIROS_SINTOMAS': 'DATA_SINTOMAS',
-    
-    # Outras Colunas
     'FA': 'FAIXA_ETARIA', 
     'BAIRRO_RESIDENCIA': 'BAIRRO',
     'EVOLUCAO_DO_CASO': 'EVOLUCAO',
-    'CLASSIFICACAO': 'CLASSIFICACAO_FINAL', # Corrige o 'CLASSIFCAÇÃO' lido e limpo (CLASSIFICACAO) para o nome final
+    'CLASSIFICACAO': 'CLASSIFICACAO_FINAL',
     'RACA_COR': 'RACA_COR',
     'ESCOLARIDADE': 'ESCOLARIDADE',
     'DISTRITO': 'DISTRITO'
@@ -51,12 +45,8 @@ MAPEAMENTO_FAIXA_ETARIA = {
 
 # FUNÇÃO DE LIMPEZA DE COLUNAS: CORREÇÃO DEFINITIVA COM UNICODE NORMALIZATION
 def limpar_nome_coluna(col):
-    # 1. Unicode Normalization (NFKD): Trata acentos, cedilhas e caracteres ocultos.
     col_normalized = unicodedata.normalize('NFKD', col).encode('ascii', 'ignore').decode('utf-8')
-    
-    # 2. Converte para maiúsculas e substitui espaços e símbolos por underscore
     col_limpa = col_normalized.strip().upper().replace(' ', '_').replace('/', '_').replace('-', '_')
-    
     return col_limpa
 
 
@@ -73,11 +63,9 @@ def carregar_dados():
         
     
     # --- Passo 1: Limpeza Universal de Nomes de Colunas ---
-    # Aplica a limpeza robusta em TODAS as colunas do DataFrame.
     df.columns = [limpar_nome_coluna(col) for col in df.columns] 
 
-    # --- Passo 2: Padronização Final de Nomes (Resolve Duplicatas/Typos) ---
-    # Renomeia as colunas limpas para os nomes finais padronizados do dashboard.
+    # --- Passo 2: Padronização Final de Nomes ---
     rename_dict = {}
     for k_limpo, v_final in FINAL_RENAME_MAP.items():
         if k_limpo in df.columns:
@@ -86,7 +74,6 @@ def carregar_dados():
     df.rename(columns=rename_dict, inplace=True)
     
     # --- Passo 3: Limpeza de Colunas Duplicadas ---
-    # Esta etapa garante que não haja colunas duplicadas que sobreviveram ao processo.
     df = df.loc[:,~df.columns.duplicated()].copy()
 
 
@@ -121,11 +108,8 @@ if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
     if classificacoes:
         df_filtrado = df_filtrado[df_filtrado['CLASSIFICACAO_FINAL'].isin(classificacoes)]
         
-
-# --- Outros Filtros Categóricos ---
-
 # FILTRO DE SEMANA EPIDEMIOLÓGICA (AGORA ESTÁVEL)
-if 'SEMANA_EPIDEMIOLOGICA' in df_filtrado.columns: # CHECK DE SEGURANÇA
+if 'SEMANA_EPIDEMIOLOGICA' in df_filtrado.columns: 
     semanas = st.sidebar.multiselect("Semana Epidemiológica", sorted(df['SEMANA_EPIDEMIOLOGICA'].dropna().unique()))
     if semanas:
         df_filtrado = df_filtrado[df_filtrado['SEMANA_EPIDEMIOLOGICA'].isin(semanas)]
@@ -141,9 +125,7 @@ if 'SEXO' in df_filtrado.columns:
 # Ordenação da Faixa Etária
 if 'FAIXA_ETARIA' in df_filtrado.columns:
     faixas_presentes = df['FAIXA_ETARIA'].dropna().unique().tolist()
-    
     faixas_ordenadas = [f for f in ORDEM_FAIXA_ETARIA if f in faixas_presentes]
-    
     faixas = st.sidebar.multiselect("Faixa Etária", faixas_ordenadas) 
     if faixas:
         df_filtrado = df_filtrado[df_filtrado['FAIXA_ETARIA'].isin(faixas)]
@@ -170,42 +152,41 @@ if df_filtrado.empty:
     st.stop()
 
 
-# ========= INDICADORES PRINCIPAIS (CARDS) - ALTERAÇÃO AQUI =========
+# ========= INDICADORES PRINCIPAIS (CARDS) - TRECHO ALTERADO PARA ALINHAMENTO E LÓGICA =========
 st.header("Resumo dos Indicadores")
 
 confirmados = 0 
 obitos = 0
 descartados = 0 
 
-col0, col1, col2, col3, col4 = st.columns(5) 
+# ALTERAÇÃO: Reduzido para 4 colunas (col0 a col3) para remover o espaço vazio inicial
+col0, col1, col2, col3 = st.columns(4) 
 
 total_filtrado = len(df_filtrado)
-col1.metric("Notificações no período", total_filtrado) 
+# ALTERAÇÃO: Métrica movida para a primeira coluna (col0)
+col0.metric("Notificações no período", total_filtrado) 
 
 if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
     
-    # NOVAS CLASSIFICAÇÕES PARA "CONFIRMADOS" (em letras maiúsculas)
     CLASSIFICACOES_CONFIRMADO = ["DENGUE", "DENGUE COM SINAIS DE ALARME"]
-    
     classificacao_upper = df_filtrado['CLASSIFICACAO_FINAL'].astype(str).str.upper().str.strip()
     
-    # Calcula confirmados (incluindo as duas categorias de Dengue)
     confirmados = classificacao_upper.isin(CLASSIFICACOES_CONFIRMADO).sum()
-    
-    # Mantém a lógica de descartados
     descartados = (classificacao_upper == "DESCARTADO").sum()
     
-    col2.metric("Confirmados", confirmados)
-    col3.metric("Descartados", descartados) 
+    # Métricas movidas para col1 e col2
+    col1.metric("Confirmados", confirmados)
+    col2.metric("Descartados", descartados) 
 
 if 'EVOLUCAO' in df_filtrado.columns:
     obitos = (df_filtrado['EVOLUCAO'].astype(str).str.upper().str.contains("ÓBITO", na=False)).sum()
 
 if confirmados > 0:
     letalidade = (obitos / confirmados) * 100
-    col4.metric("Taxa de Letalidade (%)", f"{letalidade:.2f}% ({obitos} óbitos)")
+    # Métrica movida para col3
+    col3.metric("Taxa de Letalidade (%)", f"{letalidade:.2f}% ({obitos} óbitos)")
 else:
-    col4.metric("Taxa de Letalidade (%)", "N/A")
+    col3.metric("Taxa de Letalidade (%)", "N/A")
 
 
 # ========= GRÁFICOS =========
