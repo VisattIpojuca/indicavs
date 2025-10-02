@@ -5,10 +5,10 @@ from datetime import datetime
 import unicodedata # Módulo essencial para lidar com acentos/caracteres ocultos
 
 # ========== CONFIGURAÇÃO GERAL ==========
-st.set_page_config(page_title="📊 Dashboard Epidemiológico", layout="wide")
+st.set_page_config(page_title="🦟 Dengue Ipojuca", layout="wide")
 
-st.title("📊 Dashboard Epidemiológico Interativo")
-st.caption("Fonte: Google Sheets - Atualização automática")
+st.title("🦟 Dashboard Vigilância das Arboviroses (Dengue)")
+st.caption("Fonte: Grência de Promoção, Prevenção e Vigilância Epidemiológica 📊🗺️")
 
 # Dicionário FINAL para padronizar nomes de colunas no DataFrame LIMPO.
 FINAL_RENAME_MAP = {
@@ -250,7 +250,7 @@ if 'RACA_COR' in df_filtrado.columns and 'ESCOLARIDADE' in df_filtrado.columns:
 
 
 # --- 5. Sintomas e Comorbidades Mais Frequentes ---
-st.subheader("🧩 Sintomas e Comorbidades")
+st.subheader("🩺 Sintomas e Comorbidades")
 sintomas_e_comorbidades = [
     "FEBRE", "MIALGIA", "CEFALEIA", "EXANTEMA", "VOMITO", "NAUSEA",
     "DOR_COSTAS", "CONJUNTVITE", "ARTRITE", "ARTRALGIA", "PETEQUIAS",
@@ -312,4 +312,4 @@ st.download_button(
     mime="text/csv"
 )
 
-st.caption("Desenvolvido para Vigilância em Saúde.")
+st.caption("Desenvolvido pelo Cievs Ipojuca.")
