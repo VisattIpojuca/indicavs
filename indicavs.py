@@ -57,7 +57,7 @@ MAPEAMENTO_FAIXA_ETARIA = {
     'IGNORADO': 'IGNORADO',
 }
 
-# FUNÇÃO DE LIMPEZA DE COLUNAS: CORREÇÃO DO ERRO
+# FUNÇÃO DE LIMPEZA DE COLUNAS: Garante que acentos e espaços virem apenas letras e underscores
 def limpar_nome_coluna(col):
     col_limpa = col.strip().upper().replace(' ', '_').replace('/', '_')
     # Substitui acentos comuns por letras não acentuadas (CORREÇÃO CRÍTICA)
@@ -88,12 +88,26 @@ def carregar_dados():
 
     # 2. Cria o dicionário de renomeação usando as chaves do COLUNA_MAP limpas 
     rename_dict = {}
+    cleaned_df_columns = df.columns.tolist()
+
     for k_original, v_final in COLUNA_MAP.items():
         k_limpa = limpar_nome_coluna(k_original)
-        if k_limpa in df.columns:
+        
+        # Tenta a correspondência exata para renomear
+        if k_limpa in cleaned_df_columns:
             rename_dict[k_limpa] = v_final
 
     df.rename(columns=rename_dict, inplace=True)
+    
+    # 3. CORREÇÃO DE CONTINGÊNCIA PARA ERROS PERSISTENTES (SEMANA EPIDEMIOLÓGICA)
+    # Garante que a coluna crítica seja renomeada, mesmo se o mapa falhar por pequenas variações.
+    if 'SEMANA_EPIDEMIOLOGICA' not in df.columns:
+        for col in df.columns:
+            # Procura por qualquer coluna que contenha a palavra-chave "SEMANA" e "EPIDEMIOLOGICA"
+            if 'SEMANA' in col and 'EPIDEMIOLOGICA' in col:
+                df.rename(columns={col: 'SEMANA_EPIDEMIOLOGICA'}, inplace=True)
+                break
+
 
     # --- PADRONIZAÇÃO E AGRUPAMENTO DA FAIXA ETÁRIA ---
     if 'FAIXA_ETARIA' in df.columns:
@@ -130,7 +144,7 @@ if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
 
 # --- Filtros Categóricos ---
 
-# FILTRO DE SEMANA EPIDEMIOLÓGICA (AGORA ESTÁVEL)
+# FILTRO DE SEMANA EPIDEMIOLOGICA (AGORA ESTÁVEL)
 if 'SEMANA_EPIDEMIOLOGICA' in df_filtrado.columns:
     semanas = st.sidebar.multiselect("Semana Epidemiológica", sorted(df['SEMANA_EPIDEMIOLOGICA'].dropna().unique()))
     if semanas:
@@ -275,7 +289,6 @@ for s in sintomas_e_comorbidades:
     s_limpa = limpar_nome_coluna(s)
     
     if s_limpa in df_filtrado.columns:
-        # A coluna aqui usa o nome limpo (s_limpa)
         count = (df_filtrado[s_limpa].astype(str).str.upper().str.strip() == "SIM").sum()
         if count > 0:
             nome_display = s.replace('_', ' ').capitalize()
