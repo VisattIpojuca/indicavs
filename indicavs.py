@@ -14,7 +14,7 @@ COLUNA_MAP = {
     'SEMANA EPIDEMIOLÓGICA 2': 'SEMANA_EPIDEMIOLOGICA',
     'DATA DE NOTIFICAÇÃO': 'DATA_NOTIFICACAO',
     'DATA PRIMEIRO SINTOMAS': 'DATA_SINTOMAS',
-    'FA': 'FAIXA_ETARIA',
+    'FA': 'FAIXA_ETARIA', # Manter o nome FA para mapear para FAIXA_ETARIA
     'BAIRRO RESIDÊNCIA': 'BAIRRO',
     'EVOLUÇÃO DO CASO': 'EVOLUCAO',
     'CLASSIFCAÇÃO': 'CLASSIFICACAO_FINAL',
@@ -23,13 +23,51 @@ COLUNA_MAP = {
     'DISTRITO': 'DISTRITO'
 }
 
+# CHAVE DE ORDENAÇÃO MANUAL PARA O NOVO PADRÃO DE FAIXA ETÁRIA
+ORDEM_FAIXA_ETARIA = [
+    '1 a 4 anos', 
+    '5 a 9 anos', 
+    '10 a 14 anos', 
+    '15 a 19 anos', 
+    '20 a 39 anos', # Nova faixa agrupada
+    '40 a 59 anos', # Nova faixa agrupada
+    '60 anos ou mais', # Novo nome
+    'IGNORADO' # Mantido para dados ausentes
+]
+
+# DICIONÁRIO PARA AGRUPAR E PADRONIZAR AS FAIXAS ETÁRIAS ANTIGAS PARA AS NOVAS
+# VOCÊ PODE PRECISAR AJUSTAR AS CHAVES DESTE DICIONÁRIO PARA REFLETIR EXATAMENTE O QUE ESTÁ NA SUA PLANILHA.
+MAPEAMENTO_FAIXA_ETARIA = {
+    '0 a 4': '1 a 4 anos',
+    '1 a 4': '1 a 4 anos',
+    '5 a 9': '5 a 9 anos',
+    '10 a 14': '10 a 14 anos',
+    '15 a 19': '15 a 19 anos',
+    
+    # Agrupando faixas etárias antigas nas novas faixas de 20 a 39
+    '20 a 29': '20 a 39 anos',
+    '30 a 39': '20 a 39 anos',
+    
+    # Agrupando faixas etárias antigas nas novas faixas de 40 a 59
+    '40 a 49': '40 a 59 anos',
+    '50 a 59': '40 a 59 anos',
+    
+    # Agrupando faixas etárias antigas na nova faixa de 60 ou mais
+    '60 a 69': '60 anos ou mais',
+    '70 a 79': '60 anos ou mais',
+    '80 ou mais': '60 anos ou mais',
+    'IGNORADO': 'IGNORADO',
+    # Adicione aqui outras variações que você tenha na planilha:
+    # 'INDEFINIDO': 'IGNORADO',
+}
+
+
 # ========= FUNÇÃO DE CARREGAR DADOS =========
 @st.cache_data
 def carregar_dados():
     url = "https://docs.google.com/spreadsheets/d/1bdHetdGEXLgXv7A2aGvOaItKxiAuyg0Ip0UER1BjjOg/export?format=csv"
     
     try:
-        # Tenta ler o CSV (pode-se adicionar skiprows=N se houver linhas de título extras)
         df = pd.read_csv(url)
     except Exception as e:
         st.error(f"❌ Erro de conexão. Verifique o compartilhamento da planilha.")
@@ -39,7 +77,19 @@ def carregar_dados():
     df.columns = [col.strip().upper().replace(' ', '_').replace('/', '_') for col in df.columns]
     df.rename(columns={k.strip().upper().replace(' ', '_').replace('/', '_'): v for k, v in COLUNA_MAP.items()}, inplace=True)
 
-    # Converter datas (manter o passo para uso nos gráficos se necessário, mesmo que não seja usado nos filtros)
+    # --- NOVO PASSO: PADRONIZAÇÃO E AGRUPAMENTO DA FAIXA ETÁRIA ---
+    if 'FAIXA_ETARIA' in df.columns:
+        # 1. Converte a coluna para string e retira espaços (preparação para o mapeamento)
+        df['FAIXA_ETARIA'] = df['FAIXA_ETARIA'].astype(str).str.strip()
+        
+        # 2. Aplica o mapeamento para as novas faixas e agrupa
+        df['FAIXA_ETARIA'] = df['FAIXA_ETARIA'].replace(MAPEAMENTO_FAIXA_ETARIA)
+        
+        # 3. Substitui valores NaT/vazios restantes por 'IGNORADO'
+        df['FAIXA_ETARIA'] = df['FAIXA_ETARIA'].fillna('IGNORADO')
+        
+
+    # Converter datas
     for col in ['DATA_NOTIFICACAO', 'DATA_SINTOMAS']:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
@@ -53,13 +103,14 @@ if df.empty:
     st.stop()
 
 
-# ========= FILTROS NA BARRA LATERAL (APENAS CATEGÓRICOS) =========
+# ========= FILTROS NA BARRA LATERAL (FAIXA ETÁRIA ORDENADA) =========
 st.sidebar.header("🔎 Filtros")
 
-# DataFrame inicial, sem filtros de data aplicados por padrão
 df_filtrado = df.copy() 
 
 # --- Filtros Categóricos ---
+# ... (outros filtros mantidos) ...
+
 if 'SEMANA_EPIDEMIOLOGICA' in df_filtrado.columns:
     semanas = st.sidebar.multiselect("Semana Epidemiológica", sorted(df['SEMANA_EPIDEMIOLOGICA'].dropna().unique()))
     if semanas:
@@ -70,8 +121,14 @@ if 'SEXO' in df_filtrado.columns:
     if sexos:
         df_filtrado = df_filtrado[df_filtrado['SEXO'].isin(sexos)]
 
+# CORREÇÃO: Ordenação da Faixa Etária (usando a nova lista ORDEM_FAIXA_ETARIA)
 if 'FAIXA_ETARIA' in df_filtrado.columns:
-    faixas = st.sidebar.multiselect("Faixa Etária", sorted(df['FAIXA_ETARIA'].dropna().unique()))
+    faixas_presentes = df['FAIXA_ETARIA'].dropna().unique().tolist()
+    
+    # Filtra e ordena as faixas presentes usando a ordem manual definida
+    faixas_ordenadas = [f for f in ORDEM_FAIXA_ETARIA if f in faixas_presentes]
+    
+    faixas = st.sidebar.multiselect("Faixa Etária", faixas_ordenadas) # Usa a lista ordenada
     if faixas:
         df_filtrado = df_filtrado[df_filtrado['FAIXA_ETARIA'].isin(faixas)]
 
@@ -104,19 +161,15 @@ if df_filtrado.empty:
 # ========= INDICADORES PRINCIPAIS (CARDS) =========
 st.header("Resumo dos Indicadores")
 
-# Inicializa variáveis para garantir o cálculo da letalidade
 confirmados = 0 
 obitos = 0
 descartados = 0 
 
-# Dividindo o espaço em 5 colunas
 col0, col1, col2, col3, col4 = st.columns(5) 
 
-# --- Total Geral da Base (Agora é o número de 1.292) ---
 total_base = len(df) 
 col0.metric("Total Geral da Base", total_base) 
 
-# --- Casos Filtrados (Será igual ao total da base se nenhum outro filtro for aplicado) ---
 total_filtrado = len(df_filtrado)
 col1.metric("Casos Filtrados", total_filtrado) 
 
@@ -129,7 +182,6 @@ if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
 if 'EVOLUCAO' in df_filtrado.columns:
     obitos = (df_filtrado['EVOLUCAO'].str.upper().str.contains("ÓBITO", na=False)).sum()
 
-# Indicador de Taxa de Letalidade
 if confirmados > 0:
     letalidade = (obitos / confirmados) * 100
     col4.metric("Taxa de Letalidade (%)", f"{letalidade:.2f}% ({obitos} óbitos)")
@@ -229,9 +281,13 @@ else:
     st.info("Nenhuma manifestação ou comorbidade 'SIM' encontrada no período filtrado.")
 
 
-# --- 6. Distribuição por Sexo e Faixa Etária ---
+# --- 6. Distribuição por Sexo e Faixa Etária (Ordenada) ---
 st.subheader("👥 Perfil Demográfico")
 if 'SEXO' in df_filtrado.columns and 'FAIXA_ETARIA' in df_filtrado.columns:
+    
+    faixas_presentes_no_grafico = df_filtrado['FAIXA_ETARIA'].dropna().unique().tolist()
+    faixas_para_grafico = [f for f in ORDEM_FAIXA_ETARIA if f in faixas_presentes_no_grafico]
+
     fig_demog = px.histogram(
         df_filtrado, 
         x="FAIXA_ETARIA", 
@@ -239,6 +295,9 @@ if 'SEXO' in df_filtrado.columns and 'FAIXA_ETARIA' in df_filtrado.columns:
         barmode="group",
         title="Casos por Faixa Etária e Sexo"
     )
+    # Define a ordem do eixo X do gráfico (usando a nova ordem padronizada)
+    fig_demog.update_xaxes(categoryorder='array', categoryarray=faixas_para_grafico)
+    
     st.plotly_chart(fig_demog, use_container_width=True)
 
 
