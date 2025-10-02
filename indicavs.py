@@ -17,7 +17,7 @@ COLUNA_MAP = {
     'FA': 'FAIXA_ETARIA', # Manter o nome FA para mapear para FAIXA_ETARIA
     'BAIRRO RESIDÊNCIA': 'BAIRRO',
     'EVOLUÇÃO DO CASO': 'EVOLUCAO',
-    'CLASSIFCAÇÃO': 'CLASSIFICACAO_FINAL',
+    'CLASSIFICACÃO': 'CLASSIFICACAO_FINAL', # CHAVE CORRIGIDA
     'RAÇA/COR': 'RACA_COR',
     'ESCOLARIDADE': 'ESCOLARIDADE',
     'DISTRITO': 'DISTRITO'
@@ -130,7 +130,7 @@ if 'FAIXA_ETARIA' in df_filtrado.columns:
     if faixas:
         df_filtrado = df_filtrado[df_filtrado['FAIXA_ETARIA'].isin(faixas)]
 
-# FILTRO DE CLASSIFICAÇÃO (Já está aqui!)
+# FILTRO DE CLASSIFICAÇÃO (Deve funcionar agora)
 if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
     classificacoes = st.sidebar.multiselect("Classificação Final", df['CLASSIFICACAO_FINAL'].dropna().unique())
     if classificacoes:
