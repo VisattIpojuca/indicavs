@@ -16,7 +16,7 @@ COLUNA_MAP = {
     'SEMANA EPIDEMIOLÓGICA 2': 'SEMANA_EPIDEMIOLOGICA',
     'DATA DE NOTIFICAÇÃO': 'DATA_NOTIFICACAO',
     'DATA PRIMEIRO SINTOMAS': 'DATA_SINTOMAS',
-    'FA': 'FAIXA_ETARIA', # Manter o nome FA para mapear para FAIXA_ETARIA
+    'FA': 'FAIXA_ETARIA', 
     'BAIRRO RESIDÊNCIA': 'BAIRRO',
     'EVOLUÇÃO DO CASO': 'EVOLUCAO',
     'CLASSIFCAÇÃO': 'CLASSIFICACAO_FINAL',
@@ -31,10 +31,10 @@ ORDEM_FAIXA_ETARIA = [
     '5 a 9 anos', 
     '10 a 14 anos', 
     '15 a 19 anos', 
-    '20 a 39 anos', # Nova faixa agrupada
-    '40 a 59 anos', # Nova faixa agrupada
-    '60 anos ou mais', # Novo nome
-    'IGNORADO' # Mantido para dados ausentes
+    '20 a 39 anos', 
+    '40 a 59 anos', 
+    '60 anos ou mais', 
+    'IGNORADO'
 ]
 
 # DICIONÁRIO PARA AGRUPAR E PADRONIZAR AS FAIXAS ETÁRIAS ANTIGAS PARA AS NOVAS
@@ -45,27 +45,22 @@ MAPEAMENTO_FAIXA_ETARIA = {
     '10 a 14': '10 a 14 anos',
     '15 a 19': '15 a 19 anos',
     
-    # Agrupando faixas etárias antigas nas novas faixas de 20 a 39
     '20 a 29': '20 a 39 anos',
     '30 a 39': '20 a 39 anos',
     
-    # Agrupando faixas etárias antigas nas novas faixas de 40 a 59
     '40 a 49': '40 a 59 anos',
     '50 a 59': '40 a 59 anos',
     
-    # Agrupando faixas etárias antigas na nova faixa de 60 ou mais
     '60 a 69': '60 anos ou mais',
     '70 a 79': '60 anos ou mais',
     '80 ou mais': '60 anos ou mais',
     'IGNORADO': 'IGNORADO',
-    # Adicione aqui outras variações que você tenha na planilha:
-    # 'INDEFINIDO': 'IGNORADO',
 }
 
-# FUNÇÃO DE LIMPEZA DE COLUNAS: Garante que acentos e espaços virem apenas letras e underscores
+# FUNÇÃO DE LIMPEZA DE COLUNAS: CORREÇÃO DO ERRO
 def limpar_nome_coluna(col):
     col_limpa = col.strip().upper().replace(' ', '_').replace('/', '_')
-    # Substitui acentos comuns por letras não acentuadas (CRITICAL FIX)
+    # Substitui acentos comuns por letras não acentuadas (CORREÇÃO CRÍTICA)
     replacements = {
         'Ã': 'A', 'Õ': 'O', 'Ç': 'C', 
         'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 
@@ -91,7 +86,7 @@ def carregar_dados():
     # 1. Aplica a limpeza robusta em TODAS as colunas do DataFrame
     df.columns = [limpar_nome_coluna(col) for col in df.columns]
 
-    # 2. Cria o dicionário de renomeação usando as chaves do COLUNA_MAP limpas (para garantir o match)
+    # 2. Cria o dicionário de renomeação usando as chaves do COLUNA_MAP limpas 
     rename_dict = {}
     for k_original, v_final in COLUNA_MAP.items():
         k_limpa = limpar_nome_coluna(k_original)
@@ -102,13 +97,8 @@ def carregar_dados():
 
     # --- PADRONIZAÇÃO E AGRUPAMENTO DA FAIXA ETÁRIA ---
     if 'FAIXA_ETARIA' in df.columns:
-        # 1. Converte a coluna para string e retira espaços (preparação para o mapeamento)
         df['FAIXA_ETARIA'] = df['FAIXA_ETARIA'].astype(str).str.strip()
-        
-        # 2. Aplica o mapeamento para as novas faixas e agrupa
         df['FAIXA_ETARIA'] = df['FAIXA_ETARIA'].replace(MAPEAMENTO_FAIXA_ETARIA)
-        
-        # 3. Substitui valores NaT/vazios restantes por 'IGNORADO'
         df['FAIXA_ETARIA'] = df['FAIXA_ETARIA'].fillna('IGNORADO')
         
 
@@ -140,6 +130,7 @@ if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
 
 # --- Filtros Categóricos ---
 
+# FILTRO DE SEMANA EPIDEMIOLÓGICA (AGORA ESTÁVEL)
 if 'SEMANA_EPIDEMIOLOGICA' in df_filtrado.columns:
     semanas = st.sidebar.multiselect("Semana Epidemiológica", sorted(df['SEMANA_EPIDEMIOLOGICA'].dropna().unique()))
     if semanas:
@@ -150,19 +141,17 @@ if 'SEXO' in df_filtrado.columns:
     if sexos:
         df_filtrado = df_filtrado[df_filtrado['SEXO'].isin(sexos)]
 
-# CORREÇÃO: Ordenação da Faixa Etária (usando a nova lista ORDEM_FAIXA_ETARIA)
+# Ordenação da Faixa Etária
 if 'FAIXA_ETARIA' in df_filtrado.columns:
     faixas_presentes = df['FAIXA_ETARIA'].dropna().unique().tolist()
     
-    # Filtra e ordena as faixas presentes usando a ordem manual definida
     faixas_ordenadas = [f for f in ORDEM_FAIXA_ETARIA if f in faixas_presentes]
     
-    faixas = st.sidebar.multiselect("Faixa Etária", faixas_ordenadas) # Usa a lista ordenada
+    faixas = st.sidebar.multiselect("Faixa Etária", faixas_ordenadas) 
     if faixas:
         df_filtrado = df_filtrado[df_filtrado['FAIXA_ETARIA'].isin(faixas)]
 
-# O filtro de Classificação Final foi removido daqui
-
+# FILTRO DE EVOLUÇÃO DO CASO (AGORA ESTÁVEL)
 if 'EVOLUCAO' in df_filtrado.columns:
     evolucoes = st.sidebar.multiselect("Evolução do Caso", df['EVOLUCAO'].dropna().unique())
     if evolucoes:
@@ -197,14 +186,12 @@ total_filtrado = len(df_filtrado)
 col1.metric("Notificações no período", total_filtrado) 
 
 if 'CLASSIFICACAO_FINAL' in df_filtrado.columns:
-    # Garante que a coluna é string para evitar erros de comparação
     confirmados = (df_filtrado['CLASSIFICACAO_FINAL'].astype(str).str.upper().str.strip() == "CONFIRMADO").sum()
     descartados = (df_filtrado['CLASSIFICACAO_FINAL'].astype(str).str.upper().str.strip() == "DESCARTADO").sum()
     col2.metric("Confirmados", confirmados)
     col3.metric("Descartados", descartados) 
 
 if 'EVOLUCAO' in df_filtrado.columns:
-    # Garante que a coluna é string
     obitos = (df_filtrado['EVOLUCAO'].astype(str).str.upper().str.contains("ÓBITO", na=False)).sum()
 
 if confirmados > 0:
@@ -276,23 +263,19 @@ if 'RACA_COR' in df_filtrado.columns and 'ESCOLARIDADE' in df_filtrado.columns:
 
 # --- 5. Sintomas e Comorbidades Mais Frequentes ---
 st.subheader("🧩 Sintomas e Comorbidades")
-# Os nomes das colunas aqui agora também estão sujeitos à limpeza robusta
 sintomas_e_comorbidades = [
     "FEBRE", "MIALGIA", "CEFALEIA", "EXANTEMA", "VOMITO", "NAUSEA",
     "DOR_COSTAS", "CONJUNTVITE", "ARTRITE", "ARTRALGIA", "PETEQUIAS",
     "LEUCOPENIA", "LAÇO", "DOR_RETRO", "DIABETES", "HEMATOLOGICAS",
-    "HEPATOPATIAS", "RENAL", "HIPERTENSAO", "ACIDO_PEPT", "AUTO_IMUNE" # HIPERTENSÃO foi limpo para HIPERTENSAO
+    "HEPATOPATIAS", "RENAL", "HIPERTENSÃO", "ACIDO_PEPT", "AUTO_IMUNE"
 ]
 
 presenca_data = []
 for s in sintomas_e_comorbidades:
-    # CRITICAL: O nome da coluna do DataFrame (df_filtrado.columns) foi limpo para remover acentos.
-    # Portanto, a chave de busca (s.upper()) também precisa estar limpa, se for o caso.
-    # Ex: LAÇO (com cê cedilha) será lido como L_A_C_O_ (dependendo do CSV) e limpo para LACO. 
-    # Vou forçar a limpeza da chave de busca para maior consistência.
     s_limpa = limpar_nome_coluna(s)
     
     if s_limpa in df_filtrado.columns:
+        # A coluna aqui usa o nome limpo (s_limpa)
         count = (df_filtrado[s_limpa].astype(str).str.upper().str.strip() == "SIM").sum()
         if count > 0:
             nome_display = s.replace('_', ' ').capitalize()
